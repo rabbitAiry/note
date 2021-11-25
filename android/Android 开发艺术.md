@@ -78,6 +78,8 @@
 
 
 
+[TOC]
+
 ### #2 IPC机制
 
 > Inter-Process Communication进程间通信
@@ -85,8 +87,8 @@
 - [x] ——Binder前
 - [x] ——Binder
 - [x] ——AIDL部分
-- [ ] ——AIDL
-- [ ] ——2.5前
+- [x] ——AIDL
+- [x] ——2.5前
 - [ ] ——#3前
 
 ##### 2.1 Android IPC简介
@@ -174,7 +176,7 @@
 - 使用Messenger
 
   - 可以在不同进程之间传递Message对象。本质是AIDL
-  - 只能一个个处理，难以完成并发请求
+  - 只能一个个处理，只能传输Bundle支持的数据类型
   - :flags: 
 - 使用AIDL：
   - 服务端：创建Service用来监听客户端的连接请求、创建一个AIDL文件用于暴露接口、在Service中实现这些接口
@@ -182,13 +184,22 @@
   - AIDL接口的创建
   - :flags: 实践部分
 - 使用ContentProvider
-- 使用Socket
+  - 数据源访问方面功能强大，支持一对多并发数据共享。Binder是其底层实现
+  - 将ContentProvider放在独立进程中时，Provider以及访问这个Provider的组件需要声明权限
+  - `onCreate()`方法仍会在主线程中执行，其余方法则在单独的线程中执行
+
+- 使用Socket套接字
+  - 功能强大，但实现略麻烦
+  - 分为流式套接字和用户数据套接字，分别用于TCP和UDP协议
 
 ##### 2.5 Binder连接池
 
-##### 2.6 选用合适的IPC方式
+> 痛点：假若要实现100个AIDL接口，总不能创建100个Service，因为Service是一种系统资源。所以要将所有的AIDL放在同一个Service中去管理
 
-##### ex#1 初次使用多进程
+- 在同一个Service下实现多个AIDL接口
+  - 服务端提供一个queryBinder接口，这个接口能够根据业务模块的特征来返回相应的Binder对象，不同的业务模块拿到所需的Binder对象后就可以进行远程方法调用了
+
+##### ex2.3 初次使用多进程
 
 - 创建AIDL文件
 
@@ -285,9 +296,17 @@
   bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
   ```
 
-##### ex#2 完善
+##### ex#2.3-2 完善IPC通信细节
 
 - :flags: 链接p92+
+
+##### ex#2.4 Socket通信
+
+- :flags:链接p119+
+
+##### ex#2.6 AIDL
+
+- :flags:链接p128+
 
 
 
@@ -297,123 +316,392 @@
 
 ##### 3.1 View的基础知识
 
-- 什么是View
-- View的位置参数
+- View的位置参数：由四个顶点来决定
+
+  - top, left, right, bottom皆为其到屏幕左侧或屏幕顶部的距离
+  - x, y：左上角的坐标
+  - translationX, translationY是View左上角相对于父容器的偏移量。有如下参数关系：y = top + translationY
+
 - MotionEvent和TouchSlop
-- VelocityTracker、GestureDetector和Scroller
 
-##### 3.2 View的滑动
+  - 典型的MotionEvent
 
-- 使用scrollTo或scrollBy
-- 使用动画
-- 改变布局参数
+    - ACTION_DOWN：下手接触
+    - ACTION_MOVE：手指在移动
+    - ACTION_UP：手松开
+
+  - 可以通过MotionEvent对象获取点击事件发生的x和y坐标
+
+    - getX/getY：返回相对于当前View的左上角x和y坐标
+    - getRawX/getRawY：返回相对于手机屏幕左上角的x和y坐标
+
+  - TouchSlop是常量，滑动之间的距离小于该范围是，系统不认为这是个滑动操作
+
+    - 获取(Java中)
+
+    ```java
+    ViewConfiguration.get(getContext()) .getScaledTouchSlop()
+    ```
+
+    - 获取(源码中)：frameworks/base/core/res/res/values/config.xml文件中，config_viewConfigurationTouchSlop标签内
+
+- VelocityTracker
+
+  - 速度追踪
+
+- GestureDetector
+
+  - 手势检测
+
+- Scroller
+
+  - 用于实现View的弹性滑动
+
+
+##### 3.2 View的滑动（平移？）
+
+> 以下是三种实现滑动的方式
+
+- 使用View本身提供的scrollTo或scrollBy
+- 使用动画添加效果
+- 改变布局参数使得重新布局
 - 各种滑动方式的对比
+  - scrollTo/scrollBy：方便且不影响内部元素的点击事件，但是只能滑动View的内容，不能滑动View本身
+  - 动画：可以实现复杂的效果
+  - 改变布局：使用麻烦，但适用于有交互的View
 
-##### 3.3 弹性滑动
 
-- 使用Scroller
-- 通过动画
+##### 3.3 弹性滑动（有动画的滑动？）
+
+- Scroller的使用及其工作原理
+- 通过动画Handler
 - 使用延时策略
 
 ##### 3.4 View的事件方法机制
 
-- 点击事件的传递规则
+- 点击事件的分发规则：分发过程由三个重要的方法共同完成
+
+  - dispatchTouchEvent(MotionEvent ev)
+  - onInterceptTouchEvent(MotionEvent ev)
+  - onTouchEvent(MotionEvent ev)
+
+  - 三个方法之间的关系（伪代码）
+
 - 事件分发的源码解析
+
+  - Activity对点击事件的分发过程
+  - Window对事件的分发过程
+  - 顶级View对点击事件的分发过程
+  - View对点击事件的处理过程
+
 
 ##### 3.5 View的滑动冲突
 
 - 常见的滑动冲突场景
+  - 外部左右可滑动，内部上下可滑动
+  - 外部上下可滑动，内部上下可滑动
+  - 外部左右可滑动，内部左右可滑动，内部2上下可滑动
+
 - 滑动冲突的处理规则
 - 滑动冲突的解决方式
+  - 外部拦截法：点击事件都先经过父容器的拦截处理，如果父容器需要此事件就拦截，如果不需要就不拦截。这种方法符合安卓中的事件分发机制
+  - 内部拦截法：父容器不拦截任何事件，所有的事件都传递给子元素，如果子元素需要就直接消耗掉，否则就交由父容器进行处理。这种方法较复杂，需要配合requestDisallowInterceptTouchEvent方法完成
 
 
+##### ex3.2：跟手滑动效果
+
+##### ex3.5：滑动冲突解决两种方法的示例 p176
+
+
+
+[TOC]
 
 ### #4 View的工作原理
 
 ##### 4.1 初始ViewRoot和DecorView
 
+- ViewRoot
+  - 用于连接WindowManager和DecorView的纽带
+  - View的三大流程都是由ViewRoot完成的，是从ViewRoot的performTraversals方法开始的
+- DecorView
+  - 顶级View，是一个FrameLayout
+  - 一般情况下内部包括了一个竖直方向的LinearLayout，包含了两部分：titlebar和android.R.id.content，后者由`setContentView()`指定布局
+
 ##### 4.2 理解MeasureSpec
 
+- MeasureSpec和父容器决定了一个View的尺寸规格
 - MeasureSpec
+  - 代表一个32位的int值
+    - 高两位代表SpecMode
+    - 低30位代表SpecSize
+    - 通过将两者打包成一个int值来避免过多的对象内存分配
+  - SpecMode
+    - UNSPECIFIED：父容器不对View有任何限制，要多大给多大。一般用于系统内部
+    - EXACTLY：父容器已经检测出View所需的精确大小，这个时候View的最终大小是SpecSize所指定的值，对应于LayoutParams中的match_parent和具体数值两种形式
+    - AT_MOST：父容器指定了一个可用大小即SpecSize，View的大小不能大于这个值。对应于LayoutParams中的wrap_content
 - MeasureSpec和LayoutParams的对应关系
+  - 可以给View设置LayoutParams。LayoutParams和父容器共同决定MeasureSpec
+    - DecorView的MeasureSpec由窗口的尺寸和LayoutParams共同决定
 
-##### 4.3 View的工作流程
+  - 在View测量的时候，系统会将LayoutParams在父容器的约束下转换成对应的MeasureSpec
 
-- measure过程
-- layout过程
-- draw过程
+
+##### 4.3 View的工作流程(三大流程)
+
+- measure过程：决定宽高
+  - View只需调用此方法即可完成测量过程
+  - ViewGroup除了完成测量过程，还需要遍历调用所有子View的measure方法
+  - 只有测量过程完成后，才能得到View的正确宽高，否则返回0
+
+- layout过程：确定位置
+  - 当ViewGroup的位置被确定后，在onLayout中遍历所有子元素并调用其layout方法
+
+- draw过程：绘制到屏幕上
+  - 遵循如下步骤
+    - 绘制背景background.draw(canvas)
+    - 绘制自己onDraw()
+    - 绘制childrendispatchDraw()
+    - 绘制装饰onDrawScrollBars()
+
 
 ##### 4.4 自定义View
 
-- 自定义View的分类
-- 自定义View须知
-- 自定义View示例
+- 自定义View的分类及示例
+  - 继承View重写onDraw
+  - 继承ViewGroup派生特殊的Layout
+  - 继承特定的View（如TextView）
+  - 继承特定的ViewGroup（如LinearLayout）
+
+- 自定义View注意事项
+  - 让View支持wrap_content
+  - 如果有必要，让View支持padding
+  - 尽量不要在View中使用Handler，没必要
+  - View中如果有线程或者动画，需要及时停止，参考View#onDetachedFromWindow
+  - View带有滑动嵌套情形时，需要处理好滑动冲突
+
 - 自定义View的思想
 
+##### ex4-4 自定义View示例
 
+- p217 :flags:
+
+
+
+[TOC]
 
 ### #5 理解RemoteViews
+
+- RemoteView提供了跨进程更新界面的操作
 
 ##### 5.1 RemoteViews的应用
 
 - 通知栏上
-- 桌面小部件上
-- PendingIntent概述
+
+- 桌面widget上
+
+  - 定义widget界面
+  - 定义widget配置信息
+  - 定义AppWidgetProvider的子类
+  - 在Manifest中声明
+
+- AppWidgetProvider：本质是广播
+
+  - onUpdate()
+  - onEnabled()
+  - onDisabled()
+  - onDeleted()
+  - onReceive()
+
+- PendingIntent：
+
+  > 处于pending状态下的intent。pending表示待定、即将发生的意思
+
+  - 支持三种特定意图：启动Activity、启动Service、发送广播
 
 ##### 5.2 RemoteViews的内部机制
 
+- RemoteViews的限制
+  - 仅支持部分View类型，且不包括其子类
+  - 不提供findViewById()方法，只能用一系列set方法完成
+
 ##### 5.3 RemoteViews的意义
 
+##### ex5-3 实现广播RemoteView
 
+
+
+[TOC]
 
 ### #6 Android的Drawable
 
+- 自定义成本比View要低，占用空间较小
+
 ##### 6.1 Drawable简介
+
+- 每个具体的Drawable都有其子类，如ShapeDrawable、BitmapDrawable等
+- 内部宽、高的获取：getIntrinsicWidth/Height
+  - 不是所有的Drawable都有内部宽高，颜色Drawable就没有
 
 ##### 6.2 Drawable的分类
 
-- BitmapDrawable
-- ShapeDrawable
+- BitmapDrawable：可以直接引用原始图片，也可以通过XML方式来描述。后者能设置效果
+
+  ```
+  android:src=“@[package:]drawable/img”
+  android:antialias		// 抗锯齿
+  android:dither			// 抖动效果：可以让高质量图片在低质量屏幕上有不错的显示效果
+  android:filter			// 图片被拉伸时保存较好的显示效果
+  android:mipMap			// 纹理映射
+  android:tileMode		// 平铺模式。开启后，忽略gravity属性
+  android:gravity			// 位置
+  ```
+
+- ShapeDrawable：有四种图形》rectangle、oval、line、ring
+
+  - ring有5个特殊的属性：innerRadius圆环内半径, thickness厚度, innerRadiusRatio内半径占比, thicknessRatio后读占比, useLevel一般为false
+
 - LayerDrawable
+
+  - 对应于\<layer-list>标签
+  - 通过将不同Drawable放在不同的层上面从而达到叠加后的效果
+
 - StateListDrawable
+
+  - 对应于\<selector>标签
+  - 表示Drawable的集合，每个Drawable都对应折View的一种状态
+
 - LevelListDrawable
+
+  - 对应于\<level-list>标签
+  - 根据不同level，切换至对应的Drawable
+
 - TransitionDrawable
+
+  - 对应于\<transition>标签
+  - 表示Drawable之间淡入淡出的效果
+
 - InsetDrawable
+
+  - 对应于\<inset>标签
+  - 将其他Drawable内嵌到自己当中，并可以在四周留出一定的间距。通过LayerDrawable也可以实现这种效果
+
 - ScaleDrawable
+
+  - 对应于\<scale>标签
+  - 根据level指定Drawable缩放到一定比例
+
 - ClipDrawable
+
+  - 对应于\<clip>标签
+  - 根据当前level来裁剪Drawable
+
 
 ##### 6.3 自定义Drawable
 
+- 核心就是draw()，通过重写该方法实现自定义。自定义的Drawable无法在XML中使用
 
+##### ex6-3 自定义Drawable
+
+- p278 :flags:
+
+
+
+[TOC]
 
 ### #7 Android动画深入分析
 
 ##### 7.1 View动画
 
 - View动画的种类
+  - 四种变换效果对应着Animation的四个子类：TranslateAnimation、SacleAnimation、RotateAnimation、AlphaAnimation
+  - 创建动画：通过res/anim/filename.xml来定义（根元素为set），或者使用代码来动态创建
+    - android:interpolator：表示动画集合所采用的插值器，插值器影响动画的速度。非匀速动画就需要通过插值器来控制动画的播放过程
+    - android:shareInterpolator：表示集合中的动画是否共享同一个插值器
+
 - 自定义View动画
+  - 继承自Animation，并重写
+    - initialize()：初始化
+    - applyTransformation()：进行相应的矩阵变换。可采用Camera
+
 - 帧动画
+  - 使用XML来定义一个AnimationDrawable，然后将其作为View的背景并通过Drawable来播放
+  - 使用简单，但容易引起OOM
+
 
 ##### 7.2 View动画的特殊使用场景
 
 - LayoutAnimation
+  - 作用于ViewGroup的动画效果。当其子元素出场时皆会带有这种动画效果
+  - 使用XML定义LayoutAnimation
+    - android:delay：表示子元素开始动画的时间延迟
+    - android:animationOrder：有三种顺序：normal、reverse（排在后面的优先放动画）、random
+    - android:animation：为子元素指定定义动画
+  - 在layout布局文件中，通过指定android:layoutAnimation设置动画
+  - 也可以使用LayoutAnimationController来指定
 - Activity的切换效果
+  - 使用overridePendingTransition来指定动画
+    - 这个方法必须在startActivity()或者finish()之后被调用才能生效
+
 
 ##### 7.3 属性动画
 
+> API 11+  (3.0+)
+
+- 常用动画类包括了ValueAnimator（xml中标签为`animator`）、ObjectAnimator和AnimatorSet等
 - 使用属性动画
-- 理解插值器和估值器
+  - 通过代码指定或在res/animator/下的xml文件中定义
+
+- 理解插值器TimeInterpolator和估值器TypeEvaluator
+  - 两者是实现非线性动画的关键，其中前者决定动画速度属性，后者计算动画某一时刻下的动画属性
+
 - 属性动画的监听器
+  - AnimatorListener用于监听动画播放的关键过程：可以监听其开始、结束、取消以及重复播放
+  - AnimatorUpdateListener用于监听折动画过程，没播放一帧，就调用该方法一次
+
 - 对任意属性做动画
 - 属性动画的工作原理
+  - 属性动画要求动画作用的对象提供该属性的set方法
+
 
 ##### 7.4 使用动画的注意事项
 
+- 内存泄漏：无限循环动画在Activity退出时应该要及时停止，仅属性动画存在此问题
+- View动画的问题：View动画只是对View的影像做动画，不会改变View的状态。有时会导致动画完成后View无法隐藏的现象，需要先调用view.clearAnimation()清除动画
 
+
+
+[TOC]
 
 ### #8 理解Window和WindowManager
 
+- Window表示一个窗口的概念，是一个抽象类，具体实现是PhoneWindow
+- 使用WindowManager创建一个Window。Window的具体实现位于WindowManagerService中。Window Manager和WindowManagerService的交互是一个IPC过程
+- Android中所有的视图都是通过Window来呈现的，包括了Activity、Dialog和Toast
+  - 点击事件是Window传递给DecorView再传递给View的
+  - setContentView在底层也是通过Window来完成
+- 每个Window都对应着一个View和一个ViewRootImpl
+
 ##### 8.1 Window和WindowManager
+
+- Window属性
+  - Flags参数
+    - FLAG_NOT_FOCUSABLE：表示Window不需要获取焦点
+    - FLAG_NOT_TOUCH_MODAL：此模式下，系统会将当前Window区域以外的单击事件传递给底层的Window，当前Window区域以内的单击事件则自己处理
+    - FLAG_SHOW_WHEN_LOCKED：可以让Window显示在锁屏界面上
+
+  - Type参数
+    - 应用Window：对于这一个Activity
+    - 子Window：需要附属在特定的父Window之中，如Dialog
+    - 系统Window：需要声明权限才能够创建的Window，如系统状态栏和Toast
+
+  - z-ordered：层级范围
+
+- 只能通过WindowManager来访问Window
+- Window Manager常用的三个方法
+  - addView()添加
+  - updateViewLayout()更新
+  - removeView()移除
+
 
 ##### 8.2 Window的内部机制
 
@@ -424,14 +712,33 @@
 ##### 8.3 Window的创建过程
 
 - Activity的Window创建过程
+  - setContentView步骤
+    - 如果没有DecorView，则创建
+    - 将View添加到DecorView的mContentParent
+    - 回调Activity的onContentChanged()通知Activity视图已经发生变化
+
 - Dialog的Window创建过程
+  - 创建Window
+  - 初始化DecorView并将Dialog的视图添加到DecorView中
+  - 将DecorView添加到Window中显示
+
 - Toast的Window创建过程
 
 
 
+[TOC]
+
 ### #9 四大组件的工作过程
 
 ##### 9.1 四大组件的运行状态
+
+- 四大组件
+  - 需要在Manifest中注册，除了动态的BroadcastReceiver
+  - 需要借助Intent启动，除了ContentProvider
+- Activity：只有启动状态
+- Service：有启动状态和绑定状态，前者执行后台计算，后者与外界通信方便。两者可共存
+- BroadcastReceiver：不适合执行耗时操作
+- ContentProvider：内部的增删改查需处理好线程同步
 
 ##### 9.2 Activity的工作过程
 
@@ -443,17 +750,34 @@
 ##### 9.4 BroadcastReceiver的工作过程
 
 - 广播的注册过程
+  - 静态注册的广播在应用安装时自动完成注册，通过PackageManagerService完成
+  - 动态注册的广播：从ContextWrapper的registerReceiver开始
+
 - 广播的发送和接受过程
+  - 普通广播、有序广播、粘性广播
+
 
 ##### 9.5 ContentProvider的工作过程
+
+- ContentProvider的onCreate()要先于Application的onCreate()
 
 
 
 ### #10 Android的消息机制
 
+- 主要是指Handler运行机制。Handler运行需要底层的MessageQueue和Looper支撑，前者使用单链表的数据结构存储，后者以无限循环的形式去查找是否有新消息
+  - Looper有一个特殊的概念：ThreadLocal
+    - 用于在每个线程中互不干扰地存储并提供数据
+    - 通过ThreadLocal可以获取每个线程中的Looper
+  - 线程默认是没有Looper的，而ActivityThread在被创建时就会初始化Looper
+
 ##### 10.1 Android的消息机制概述
 
+- Handler主要作用是将一个任务切换到某个指定的线程中去执行
+
 ##### 10.2 Android的消息机制分析
+
+- ThreadLocal的工作原理
 
 ##### 10.3 主线程的消息循环
 
