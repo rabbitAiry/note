@@ -68,6 +68,10 @@
 
 - exp(x)：e^x^
 
+- im2col()：将图像数组转换为样本矩阵
+
+- eig()：计算矩阵的特征值和特征向量
+
 - filter(b,a,x)：
 
   - 一维数字滤波器，用于滤除向量X中的数据
@@ -87,6 +91,13 @@
   for i = 1 : length(sq)
   	% ..
   end
+  ```
+
+- figure()：创建窗口
+
+  ```matlab
+  % 展示窗口，Units属性为Normalized， Position属性为[0 0 1 1]
+  figure('Units', 'Normalized', 'Position', [0 0 1 1]);
   ```
 
   

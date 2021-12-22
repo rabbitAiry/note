@@ -613,16 +613,16 @@
 ##### 7.1 View动画
 
 - View动画的种类
-  - 四种变换效果对应着Animation的四个子类：TranslateAnimation、SacleAnimation、RotateAnimation、AlphaAnimation
+  - 四种变换效果 - 四种变换子类
+    - alpha、scale、translate、rotate
+    - TranslateAnimation、SacleAnimation、RotateAnimation、AlphaAnimation
   - 创建动画：通过res/anim/filename.xml来定义（根元素为set），或者使用代码来动态创建
     - android:interpolator：表示动画集合所采用的插值器，插值器影响动画的速度。非匀速动画就需要通过插值器来控制动画的播放过程
     - android:shareInterpolator：表示集合中的动画是否共享同一个插值器
-
 - 自定义View动画
   - 继承自Animation，并重写
     - initialize()：初始化
     - applyTransformation()：进行相应的矩阵变换。可采用Camera
-
 - 帧动画
   - 使用XML来定义一个AnimationDrawable，然后将其作为View的背景并通过Drawable来播放
   - 使用简单，但容易引起OOM
@@ -763,6 +763,8 @@
 
 
 
+[TOC]
+
 ### #10 Android的消息机制
 
 - 主要是指Handler运行机制。Handler运行需要底层的MessageQueue和Looper支撑，前者使用单链表的数据结构存储，后者以无限循环的形式去查找是否有新消息
@@ -778,37 +780,115 @@
 ##### 10.2 Android的消息机制分析
 
 - ThreadLocal的工作原理
+- 消息队列的工作原理
+- Looper的工作原理
+- Handler的工作原理
 
 ##### 10.3 主线程的消息循环
 
+##### ex10.2 ThreadLocal的工作原理
 
+- p391:flags:
+
+
+
+[TOC]
 
 ### #11 Android的线程和线程池
 
 ##### 11.1 主线程和子线程
 
+- java中默认一个进程下只有一个线程，这个线程就是主线程。除了主线程外的线程都是子线程，也叫工作线程
+- Android中，主线程也叫UI线程
+
 ##### 11.2 Android中的线程形态
 
 - AsyncTask
+  - 封装了线程池和Handler
+  - onPreExecute(), doInBackground(), onProgressUpdate(), onPostExecute()
+  - 使用限制
+    - AsyncTask类必须在主线程中加载、类必须在主线程中创建、execute方法必须在主线程中调用
+    - 不要在程序中直接调用onPreExecute()、onPostExecute()、doInBackground()和onPostExecute()
+    - 一个AsyncTask对象只能执行一次（即只能调用一次execute方法）
+
 - AsyncTask的工作原理
 - HandlerThread
+  - 继承了Thread，具有消息循环的线程，在其内部可以使用Handler
+
 - IntentService
+  - 系统对其进行了封装使其可以更方便地执行后台任务，内部采用HandlerThread来执行任务
+  - IntentService是一种服务，所以其优先级比单纯的线程要高。是一个抽象类
+
 
 ##### 11.3 Android中的线程池
 
-- ThreadPoolExecutor
+- 线程池会缓存一定数量的线程，通过线程池可以避免移位频繁创建和销毁线程所带来的系统开销
+  - 线程是操作系统调度的最小单元，又是一种受限的系统资源，线程不可能无限制地产生。并且其创建和销毁都会有相应的开销
+  - 线程池可以
+    - 重用线程池中的线程
+    - 有效控制线程池的最大并发数，避免大量的线程之间相互抢占系统资源而导致的阻塞现象
+    - 能够对线程进行简单的管理，并提供定时执行以及指定间隔循环执行等功能
+
+- ThreadPoolExecutor：线程池实现
+  - 参数
+    - corePoolSize：线程池的核心线程数
+    - maximumPoolSize：线程池所容纳的最大线程数
+    - keepAliveTime：非核心线程闲置时的超时时长
+    - unit：用于指定keepAliveTime参数的单位。常用》TimeUnit.SECONDS、TimeUnit.MILLISECONDS
+    - workQueue：线程池中的任务队列
+    - threadFactory：线程工厂，为线程池提供创建新线程的功能
+    - RejectedExecutionHandler handler
+
 - 线程池的分类
+  - FixedThreadPool：线程数量固定的线程池
+  - CachedThreadPool：线程数量不定的线程池。只有非核心线程，且最大线程数为Integer.MAX_VALUE
+  - ScheduledThreadPool：核心线程数量是固定的，而非核心线程数是没有限制的，并且当非核心线程闲置时会被立即回收
+  - SingleThreadExecutor：只有一个核心线程，确保所有的任务都在该同一个线程中按顺序执行
 
 
+
+
+[TOC]
 
 ### #12 Bitmap的加载和Cache
 
+- 加载Bitmap容易导致内存溢出
+
 ##### 12.1 Bitmap的高效加载
+
+- BitmapFactory提供了四种加载图片的方式
+  - decodeFile：从文件系统中加载
+  - decodeResource：从资源中加载
+  - decodeStream：从输入流中加载
+  - decodeByteArray：从字节数组中加载
+- 加载图片策略
+  - 很多时候ImageView并没有图片的原始尺寸那么大，没必要全部加载
+  - 通过BitmapFactory.Options可以按一定的采样率来加载缩小后的图片
+    - inSampleSize采样率：该值为n时，图片的宽高为原图大小的1/n，占用内存为原图的$\frac{1}{n^2}$ 
 
 ##### 12.2 Android中的缓存策略
 
+- 缓存策略
+  - 意义：减少了每次都从网络上请求图片或是从存储设备中加载图片，从而提高效率
+  - 主要包括了缓存的添加、获取和删除
+  - 策略内容：缓存空间是有限制的，缓存空间不足时应该删除部分缓存。删除内容优先级的排序的选择就是策略
+  - LRU(Least Recently Used)：优先淘汰近期最少使用的缓存对象
+    - LRUCache：实现内存缓存
+    - DiskLruCache：实现存储设备的缓存
+- 引用
+  - 强引用：直接当对象引用
+  - 软引用：当一个对象只有软引用存在时，系统内存不足时此对象会被gc回收
+  - 弱引用：当一个对象只有弱引用存在时，此对象会随时被gc回收
+
 - LruCache
+  - 内部采用一个LinkedHashMap以强引用的方式存储外界的缓存对象
+  - LruCache是线程安全的
 - DiskLruCache
+  - 通过将缓存对象写入文件系统从而实现缓存的效果
+  - 创建
+  - 缓存添加
+  - 缓存查找
+
 - ImageLoader的实现
 
 ##### 12.3 ImageLoader的使用
@@ -816,28 +896,75 @@
 - 照片墙效果
 - 优化列表的卡顿现象
 
+##### ex12.2、3 ImageLoader的实现及其使用 p440
 
+
+
+[TOC]
 
 ### #13 综合技术
 
 ##### 13.1 使用CrashHandler来获取应用的crash信息
 
+> 在用户使用时发生crash后，能自动收集crash信息并上传至服务器
+
 ##### 13.2 使用multidex来解决方法数越界
+
+> 安卓限制了整个应用的方法数量不能超过65536，否则不能编译（低版本安卓）。Google提供了multidex方案解决这个问题，通过将一个dex文件拆分多个dex文件；另一种方法是动态加载，先拆分，然后将部分dex文件按需加载
 
 ##### 13.3 Android的动态加载技术
 
 ##### 13.4 反编译初步
 
+> 用于研究其他产品的实现思路。反编译主要通过dex2jar以及apktool完成
+
 - 使用dex2jar和jd-gui反编译apk
-- 使用apktool对apk进行二次打包
+- 使用apktool对apk进行二次打包（打包为山寨应用）
 
 
+
+[TOC]
 
 ### #14 JNI和NDK编程
 
 ##### 14.1 JNI的开发流程
 
+> 一些和操作系统相关的特性Java无法完成，于是Java通过JNI与本地代码交互。通过JNI，用户可以调用C、C++所编写的代码
+
+1. 在java中声明native方法
+
+   - 方法需使用底层语言实现
+   - 加载动态库
+
+   ```java
+   static{
+     	System.loadLibrary("jni-test");
+   }
+   
+   public native String get();
+   ```
+
+2. 编译Java源文件得到class文件，然后通过javah命令导出JNI的头文件
+
+3. 实现JNI方法
+
+4. 编译so库并在Java中调用
+
 ##### 14.2 NDK的开发流程
+
+> NDK是Android提供的一个工具集合，通过NDK可以在Android中更方便地通过JNI来访问本地代码
+
+> 使用NDK的理由
+>
+> - 提高代码的安全性：so库反编译比较困难
+> - 可以很方便地使用目前已有的C/C++开源库
+> - 便于平台间的移植
+> - 提高程序在某些特定情形下的执行效率，但是并不能明显提示Android程序的性能
+
+1. 下载并配置NDK
+2. 创建一个Android项目，并声明所需的native方法
+3. 创建Android项目中所声明的native方法
+4. 切换到jni目录的父目录，然后通过ndk-build命令编译产生so库
 
 ##### 14.3 JNI的数据类型和类型签名
 
@@ -845,18 +972,50 @@
 
 
 
+[TOC]
+
 ### #15 Android性能优化
 
 ##### 15.1 Android的性能优化方法
 
+> 内存泄漏不会导致功能异常，但是会导致app的内存占用过大，提高内存溢出的发生几率
+
 - 布局优化
+  - 减少布局的层级（减少嵌套）
+  - 采用ViewStub、\<include>、\<merge>等
+
 - 绘制优化
-- 内存泄漏优化
+  - onDraw()方法避免执行大量的操作
+
+- 内存泄漏场景
+  - 静态变量导致的内存泄漏
+  - 单例模式导致的内存泄漏
+  - 属性动画导致的内存泄漏
+
 - 响应速度优化和ANR日志分析
+  - 采用异步的方式执行耗时操作（多线程）
+  - 当进程发生ANR后，在/data/anr目录下会创建一个traces.txt
 - ListView和Bitmap优化
+  - 避免在getView中执行耗时操作
+  - 根据滑动列表来控制任务的执行频率
+  - 尝试开启硬件加速
 - 线程优化
+  - 采用线程池
 - 一些性能优化建议
+  - 避免创建过多的对象
+  - 不要过多使用枚举，枚举占用的内存空间比整型大
+  - 常量使用static final修饰
+  - 使用一些Android特有的数据结构，如SpaceArray和Pair
+  - 适当使用软引用和弱引用
+  - 采用内存缓存和硬盘缓存
+  - 尽量采用静态内部类，这样可以避免由于内部类而导致的内存泄漏
 
 ##### 15.2 内存泄漏分析之MAT工具
 
+> Eclipse Memory Analyzer
+
 ##### 15.3 提高程序的可维护性
+
+
+
+[TOC]

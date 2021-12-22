@@ -967,9 +967,28 @@
       android:theme="@style/FruitActivityTheme">
   ```
 
-  
 
+##### *9 Pickers
 
+- 直接展示在Activity中
+
+  - 日期选择器
+
+  ```java
+  Calendar c = Calendar.getInstance();
+  binding.datePicker.init(c.get(Calendar.YEAR),
+          c.get(Calendar.MONTH),
+          c.get(Calendar.DATE),
+          (view, year, monthOfYear, dayOfMonth) -> binding.dateText.setText(year+""+(monthOfYear+1)+dayOfMonth));
+  ```
+
+  - 时间选择器
+
+  ```java
+  binding.timePicker.setOnTimeChangedListener((view, hourOfDay, minute) -> binding.timeText.setText(hourOfDay+""+minute));
+  ```
+
+- 展示在Dialog中
 
 
 
@@ -2508,8 +2527,9 @@
 - 在build.gradle中添加依赖性
 
   ```groovy
-  androidTestCompile 'com.android.support:support-annotations:与已存在的support-annotation相同版本号'
-  androidTestCompile 'com.android.support.test.espresso:espresso-core:2.2.2'
+    androidTestImplementation 'androidx.test:runner:1.1.0'
+    androidTestImplementation 'androidx.test:rules:1.1.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.0'
   ```
 
 - 在src/androidTest/java/...下创建类用于测试(OrderActivityBasicTest)
@@ -2568,6 +2588,21 @@
   }
   ```
 
+- 测试RecyclerView
+
+  - 不同adapter，需使用onView指定RecyclerView的id
+  - 在perform中使用RecyclerViewActions
+    - scroll类方法：滚动到该位置
+    - action类方法：对该位置进行操作，如长按
+  
+  - 需保证withText不会匹配到多项相同的
+  
+  ```java
+  onView(withId(R.id.fragment_now_list)).perform(RecyclerViewActions.actionOnItem(hasDescendant(withText("eat dinner")),longClick()));
+  ```
+  
+  
+  
 - 区别
 
   ```java
@@ -2581,6 +2616,11 @@
   	.DataOptions
   	.perform(ViewAction)
   	.check(ViewAssertion)
+    
+  // finding data in recyclerView
+  onView(ViewMatcher)
+    .perform(ViewAction)
+    .check(ViewAssertion)
   ```
 
 
