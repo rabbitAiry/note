@@ -761,6 +761,14 @@
   }
   ```
 
+  或
+
+  ```groovy
+  viewBinding{
+      enabled = true
+  }
+  ```
+
 - 在代码中使用
 
   - 默认每个布局文件都会生成一个binding类，名字为“布局名+Binding”
