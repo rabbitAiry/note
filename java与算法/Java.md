@@ -1,4 +1,4 @@
-# Java基础
+# Java
 
 > Thinking in Java  x  Head First Java 笔记
 
@@ -558,7 +558,7 @@
   - 当被调用的方法中含有throws关键字时，该方法必须使用try-catch块中（编译器要求）
 
     ```java
-    void makeCake(int size) throws TooBig,TooSmall{
+    void makeCake(int size) throw TooBig,TooSmall{
       if(size>100){
         throw new TooBig();
       }
@@ -1103,3 +1103,4 @@ p326- p350 特别快
 
 
 
+[TOC]

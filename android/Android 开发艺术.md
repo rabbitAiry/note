@@ -1,5 +1,3 @@
-
-
 # Android开发艺术探索 笔记
 
 [TOC]
@@ -316,11 +314,20 @@
 
 ##### 3.1 View的基础知识
 
+- 两个坐标系
+
+  - Android坐标系：以屏幕左上角为原点
+    - `getLocationOnScreen(int locaiotn[])`：返回View左上角在Android坐标系中的坐标
+    - `getRawX()`、`getRawY()`：同上
+  - 视图坐标系：以父视图左上角为原点
+
 - View的位置参数：由四个顶点来决定
 
-  - top, left, right, bottom皆为其到屏幕左侧或屏幕顶部的距离
-  - x, y：左上角的坐标
-  - translationX, translationY是View左上角相对于父容器的偏移量。有如下参数关系：y = top + translationY
+  - top, bottom：View到父视图顶部的距离
+  - left, right：View到父视图左侧的距离
+  - x, y：视图坐标系中左上角的坐标
+  - translationX, translationY：top，left相对于父容器的偏移量。有如下参数关系：y = top + translationY
+  - 这些参数都可以通过`get()`获取
 
 - MotionEvent和TouchSlop
 
@@ -329,13 +336,21 @@
     - ACTION_DOWN：下手接触
     - ACTION_MOVE：手指在移动
     - ACTION_UP：手松开
+    - ACTION_OUTSIDE：手超出边界
+    - ACTION_POINTER_DOWN：多点按下
+    - ACTION_POINTER_UP：多点离开
+
+  - 例子
+
+    - 点击事件：DOWN>>UP
+    - 滑动事件：DOWN>>MOVE>>UP
 
   - 可以通过MotionEvent对象获取点击事件发生的x和y坐标
 
     - getX/getY：返回相对于当前View的左上角x和y坐标
     - getRawX/getRawY：返回相对于手机屏幕左上角的x和y坐标
 
-  - TouchSlop是常量，滑动之间的距离小于该范围是，系统不认为这是个滑动操作
+  - TouchSlop：常量，系统能识别出的被认为是滑动的最小距离
 
     - 获取(Java中)
 
@@ -351,66 +366,176 @@
 
 - GestureDetector
 
-  - 手势检测
+  - 手势检测，用于辅助检测用户单击、滑动、长按、双击等行为
 
 - Scroller
 
-  - 用于实现View的弹性滑动
+  - 用于实现View内的弹性滑动
 
 
-##### 3.2 View的滑动（平移？）
+##### 3.2 View的移动
 
-> 以下是三种实现滑动的方式
+> 移动是瞬间改变位置，没有动画效果
+>
+> 以下是实现移动的方式
+
+- 使用layout() 或 使用offsetLeftAndRight()与offsetTopAndBottom()
+
+  ```java
+  int offsetX = rawX - lastX;
+  int offsetY = rawY - lastY;
+  layout(getLeft()+offsetX,
+          getTop()+offsetY,
+          getRight()+offsetX,
+          getBottom()+offsetY);
+  ```
 
 - 使用View本身提供的scrollTo或scrollBy
+  
+  - scrollTo()：表示移动到一个具体的坐标点
+  
+  - scrollBy()：表示移动的增量
+  
+  - 对View使用如上方法并不会令View移动，而是其所有子元素一起移动（如：子View、ImageView的drawable对象）。要使View动起来，应该在其父元素中使用该方法
+  
+  - mScrollX、mScrollY以向上向左为增加，与我们想要的相反，故需使用负数值
+  
+      ```java
+      int offsetX = rawX - lastX;
+      int offsetY = rawY - lastY;
+      ((View)getParent()).scrollBy(-offsetX, -offsetY);
+      ```
+  
 - 使用动画添加效果
-- 改变布局参数使得重新布局
-- 各种滑动方式的对比
-  - scrollTo/scrollBy：方便且不影响内部元素的点击事件，但是只能滑动View的内容，不能滑动View本身
-  - 动画：可以实现复杂的效果
-  - 改变布局：使用麻烦，但适用于有交互的View
+  - 使用translationX, translationY属性
+  - 使用View动画时，并不能真正改变View的位置
+    - 当通过View动画将一个按钮向右移动后，点击新位置无法触发onClick事件
+    - 因为view的位置信息（四个顶点）并不会随着动画而改变
+    - 如果希望动画后的状态得以保留，还需要设置filAfter为true
+    - 使用属性动画时，没有上述缺点
+  
+- 改变布局参数使得重新布局，即改变LayoutParams
+  - 修改布局的margin，或者通过改变相邻view的宽高进行挤压
+  
+  ```java
+  LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) getLayoutParams();
+  layoutParams.leftMargin = getLeft()+offsetX;
+  layoutParams.topMargin = getTop()+offsetY;
+  setLayoutParams(layoutParams);
+  ```
+  
+- [x] ex3-1》跟手滑动
 
+##### 3.3 弹性滑动
 
-##### 3.3 弹性滑动（有动画的滑动？）
+> 主要思想：将一次大的滑动分成若干次小的滑动
+>
+> 以下是实现方式
 
-- Scroller的使用及其工作原理
-- 通过动画Handler
+- 使用Scroller
+  - 通过`invalidate()`方法重绘View。Scroller本身并不能实现View的滑动，需要配合View的`computeScroll()`方法才能实现弹性滑动
+  - `computeScroll()`不断查询动画时间是否达到duration，并不断更新下一个滑动至的位置
+  
+- 通过动画
+
+    - 这里的滑动同样针对的是View的内容
+
 - 使用延时策略
+
+    - 可以使用Handler或View的postDelayed()，亦或是线程的sleep()
+    - 该方法无法精确地定时，原因是系统的消息调度也是需要时间的
+
+    ```java
+    private Handler mHandler = new Handler(){
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            switch (msg.what){
+                case MESSAGE_SCROLL_TO:
+                    // 左移100px
+                    mCount++;
+                    if (mCount <= FRAME_COUNT){
+                        float fraction = mCount/(float)FRAME_COUNT;
+                        int scrollX = (int)(fraction*100);
+                        view.scrollTo(scrollX, 0);
+                        mHandler.sendEmptyMessageDelayed(MESSAGE_SCROLL_TO, DELAYED_TIME);
+                    }
+                    break;
+            }
+        }
+    };
+    ```
+
+- [x] ex3-2》使用Scroller
 
 ##### 3.4 View的事件方法机制
 
-- 点击事件的分发规则：分发过程由三个重要的方法共同完成
+- 点击事件的分发过程由三个重要的方法共同完成
 
-  - dispatchTouchEvent(MotionEvent ev)
-  - onInterceptTouchEvent(MotionEvent ev)
-  - onTouchEvent(MotionEvent ev)
+  - dispatchTouchEvent(MotionEvent ev)：事件分发
+  - onInterceptTouchEvent(MotionEvent ev)：事件拦截
+  - onTouchEvent(MotionEvent ev)：事件处理
 
-  - 三个方法之间的关系（伪代码）
+- 点击事件传递规则
+
+  - 滑动事件会在滑动起点处从最外部的ViewGroup一直传到最内部的View中。注意是滑动起点处
+
+    ```
+    dispatchTouchEvent(group)>> id:2131231196 event:0
+    onInterceptTouchEvent(group)>> id:2131231196 event:0
+    dispatchTouchEvent(group)>> id:2131231197 event:0
+    onInterceptTouchEvent(group)>> id:2131231197 event:0
+    dispatchTouchEvent(text)>> id:2131231198 event:0
+    onTouchEvent(text)>> id:2131231198 event:0
+    onTouchEvent(group)>> id:2131231197 event:0
+    onTouchEvent(group)>> id:2131231196 event:0
+    ```
+
+  - `onInterceptTouchEvent()`的返回值：true则拦截给下级View的处理，false则继续
+
+  - `onTouchEvent()`的返回值：true则不用交给上级View处理
+
+      - 从需求来看，如果当前View能够处理点击事件，就不需要传递给上一级View来处理了
+
+  - 如果一个View设置了OnTouchListener，则假若其中的onTouch()返回true，`onTouchEvent()`将不会被调用。可以说OnTouchListener的优先级比`onTouchEvent()`要高
+
+  - OnClickListener的优先级比`onTouchEvent()`要低
+
+  - 点击事件的传递顺序：Activity>>Window>>View
+
+  - 但凡容器拦截了ACTION_DOWN事件，后续所有ACTION_MOVE，ACTION_UP事件都会直接交由其处理
 
 - 事件分发的源码解析
 
   - Activity对点击事件的分发过程
   - Window对事件的分发过程
+      - Window是抽象类，PhoneWindow是其的实现类。
+      - 通过`superDispatchTouchEvent()`将事件传递给DecorView
   - 顶级View对点击事件的分发过程
   - View对点击事件的处理过程
+      - 将view设置为disable仍会消耗点击事件
+      - 只有view的Clickable和Long_Clickable同时设置为false，才不会消耗点击事件
+      - 消耗点击事件指的是`onTouchEvent()`返回true
 
 
 ##### 3.5 View的滑动冲突
 
 - 常见的滑动冲突场景
   - 外部左右可滑动，内部上下可滑动
+      - 例：左右切换fragment，上下滑动fragment中的内容
   - 外部上下可滑动，内部上下可滑动
   - 外部左右可滑动，内部左右可滑动，内部2上下可滑动
-
+      - 前面两种场景的嵌套
 - 滑动冲突的处理规则
 - 滑动冲突的解决方式
-  - 外部拦截法：点击事件都先经过父容器的拦截处理，如果父容器需要此事件就拦截，如果不需要就不拦截。这种方法符合安卓中的事件分发机制
-  - 内部拦截法：父容器不拦截任何事件，所有的事件都传递给子元素，如果子元素需要就直接消耗掉，否则就交由父容器进行处理。这种方法较复杂，需要配合requestDisallowInterceptTouchEvent方法完成
-
-
-##### ex3.2：跟手滑动效果
-
-##### ex3.5：滑动冲突解决两种方法的示例 p176
+  - 外部拦截法
+      - 点击事件都先经过父容器的拦截处理，如果父容器需要此事件就拦截
+      - 上述逻辑在父容器的`onInterceptTouchEvent()`中处理
+      - 这种方法符合安卓中的事件分发机制
+  - 内部拦截法
+      - 父容器不拦截任何事件，所有的事件都传递给子元素，如果子元素需要就直接消耗掉，否则就交由父容器进行处理
+      - 需要配合requestDisallowInterceptTouchEvent方法完成
+      - 上述逻辑在子元素的`dispatchTouchEvent()`中处理
+      - 除了子元素需要做处理外，父元素也要默认拦截除了ACTION_DOWN以外的其他事件
 
 
 
@@ -418,7 +543,9 @@
 
 ### #4 View的工作原理
 
-##### 4.1 初始ViewRoot和DecorView
+##### 4.1 UI界面架构图
+
+<img src="image/UI界面架构图.png" alt="UI界面架构图" style="zoom:38%;" />
 
 - ViewRoot
   - 用于连接WindowManager和DecorView的纽带
@@ -426,19 +553,27 @@
 - DecorView
   - 顶级View，是一个FrameLayout
   - 一般情况下内部包括了一个竖直方向的LinearLayout，包含了两部分：titlebar和android.R.id.content，后者由`setContentView()`指定布局
+- 通过设置`requestWindowFeature(Window.FEATURE_NO_TITLE)`来设置全屏
+  - 该方法一定要在调用`setContentView()`之前
+
+- 程序在调用`setContentView()`后，ActivityManagerService会回调`onResume()`，此时系统才会把整个DecorView添加到PhoneWindow中
 
 ##### 4.2 理解MeasureSpec
 
 - MeasureSpec和父容器决定了一个View的尺寸规格
 - MeasureSpec
-  - 代表一个32位的int值
-    - 高两位代表SpecMode
-    - 低30位代表SpecSize
+  - 一个32位的int值
+    - 高2位代表SpecMode测量模式
+    - 低30位代表SpecSize测量大小
     - 通过将两者打包成一个int值来避免过多的对象内存分配
-  - SpecMode
-    - UNSPECIFIED：父容器不对View有任何限制，要多大给多大。一般用于系统内部
-    - EXACTLY：父容器已经检测出View所需的精确大小，这个时候View的最终大小是SpecSize所指定的值，对应于LayoutParams中的match_parent和具体数值两种形式
-    - AT_MOST：父容器指定了一个可用大小即SpecSize，View的大小不能大于这个值。对应于LayoutParams中的wrap_content
+- SpecMode
+  - UNSPECIFIED
+      - 父容器不对View有任何限制，要多大给多大。一般用于系统内部
+  - EXACTLY
+      - 当将控件属性指定为具体数值或match_parent时，系统使用该模式
+  - AT_MOST
+      - 对应于LayoutParams中的wrap_content
+      - 父容器指定了一个可用大小即，SpecSize，View的大小不能大于这个值
 - MeasureSpec和LayoutParams的对应关系
   - 可以给View设置LayoutParams。LayoutParams和父容器共同决定MeasureSpec
     - DecorView的MeasureSpec由窗口的尺寸和LayoutParams共同决定
@@ -448,15 +583,17 @@
 
 ##### 4.3 View的工作流程(三大流程)
 
-- measure过程：决定宽高
+- measure：决定宽高，使用MeasureSpec来完成
   - View只需调用此方法即可完成测量过程
   - ViewGroup除了完成测量过程，还需要遍历调用所有子View的measure方法
   - 只有测量过程完成后，才能得到View的正确宽高，否则返回0
-
+  - 过程：从MeasureSpec中获取测量模式和大小
+  - 自定义时，如需支持wrap_content属性，需要重写该方法
 - layout过程：确定位置
   - 当ViewGroup的位置被确定后，在onLayout中遍历所有子元素并调用其layout方法
-
+  - 在自定义ViewGroup时，通常需要重写`onLayout()`方法来控制子View显示位置的逻辑
 - draw过程：绘制到屏幕上
+  - 使用Canvas对象以进行绘制，bitmap对象则用于存储绘制在Canvas画布上的像素信息
   - 遵循如下步骤
     - 绘制背景background.draw(canvas)
     - 绘制自己onDraw()
@@ -466,24 +603,27 @@
 
 ##### 4.4 自定义View
 
+- 比较重要的回调方法
+  - `onFinishInflate()`：从XML加载组件后回调
+  - `onSizeChanged()`：组件大小改变时回调
+  - `onMeasure()`：回调该方法来进行测量
+  - `onLayout()`：回调该方法来确定显示的位置
+  - `onTouchEvent()`：监听到触摸事件时回调
+
 - 自定义View的分类及示例
   - 继承View重写onDraw
   - 继承ViewGroup派生特殊的Layout
   - 继承特定的View（如TextView）
   - 继承特定的ViewGroup（如LinearLayout）
-
 - 自定义View注意事项
   - 让View支持wrap_content
   - 如果有必要，让View支持padding
   - 尽量不要在View中使用Handler，没必要
   - View中如果有线程或者动画，需要及时停止，参考View#onDetachedFromWindow
   - View带有滑动嵌套情形时，需要处理好滑动冲突
-
 - 自定义View的思想
 
-##### ex4-4 自定义View示例
-
-- p217 :flags:
+##### 4.5 自定义组合控件（非include）
 
 
 

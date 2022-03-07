@@ -653,6 +653,8 @@
   ```java
   // Create an explicit intent for an Activity in your app
   // 使用notificationCompat是因为通知的api不稳定
+  
+  // d
   Intent intent = new Intent(this, AlertDetails.class);
   intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
   PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
@@ -1608,6 +1610,12 @@
 
 - 构建service：创建Service的子类
 
+- Service生命周期
+
+  - 服务的启动与关闭：使用Intent指向Service子类
+  - `onCreate()`与`onStartCommand()`或`onBind()`：service未创建或绑定时，两者都会被调用。创建后，启动服务时只会执行后者
+  - 让服务自动结束：在MyService的任意位置调用`stopSelf()`方法
+
   ```java
   public class MyService extends Service {
       private static final String TAG = "ServiceTest";
@@ -1639,8 +1647,6 @@
   }
   ```
 
-- 服务的启动与关闭：使用Intent指向Service子类
-
   ```java
   Intent intent = new Intent(this, MyService.class);
   // 服务的启动
@@ -1649,10 +1655,6 @@
   stopService(intent);
   ```
 
-- 让服务自动结束：在MyService的任意位置调用`stopSelf()`方法
-
-- `onCreate()`与`onStartCommand()`或`onBind()`：service未创建或绑定时，两者都会被调用。创建后，启动服务时只会执行后者
-
 - 活动和服务进行通信：使用Binder
 
   - 在Serivce子类中
@@ -1660,12 +1662,35 @@
     - 创建Binder子类
     - 指定Binder对象，并在`onBind()`方法中返回
 
+    ```java
+    // 实例化
+    private DownloadBinder mBinder = new DownloadBinder();
+    
+    // Binder子类
+    class DownloadBinder extends Binder {
+        public void startDownload(){
+            Log.d(TAG, "startDownload: ");
+        }
+        public int getProgress(){
+            Log.d(TAG, "getProgress: ");
+            return 0;
+        }
+    }
+    
+    // 返回binder
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+    ```
+
   - 在Activity子类中
 
-    - 指定Binder对象
+    - 指定Binder对象，
     - 指定ServiceConnection，并在`onServiceConnected()`方法中指定将Binder对象指向service。然后就可以调用Binder内的方法了
 
     ```java
+    // 初始化
     private MyService.DownloadBinder downloadBinder;
     private ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -1678,17 +1703,15 @@
         @Override
         public void onServiceDisconnected(ComponentName name) {}
     };
-    ```
-
-    - 绑定或取消绑定服务
-
-    ```java
-    // 绑定
+    
+    // 使用binder绑定
     Intent intent = new Intent(this, MyService.class);
     bindService(bindIntent, connection, BIND_AUTO_CREATE);
-    // 取消绑定：不需要intent
+    
+    // 取消绑定
     unbindService(connection);
     ```
+    
 
 - 服务的生命周期
 
@@ -1735,14 +1758,10 @@
 - 创建BroadcastReceiver的子类
 
   - 重写onReceive方法。这个方法会在接收到广播后被调用
-  - 在这个方法中，使用系统服务获取网络信息（这里不是广播内容）。获取像网络信息这些较敏感数据需要在Manifest中声明权限
+  - 获取像网络信息这些较敏感数据需要在Manifest中声明权限
 
-  ```java
-  ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-  NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-  if(networkInfo!=null && networkInfo.isAvailable()){
-     // ...
-  }
+  ```xml
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   ```
 
 - 在activity中
@@ -1755,12 +1774,6 @@
   filter.addAction("android.net.conn.CONNECTIVITY_CHANGE");
   NetworkChangeReceiver receiver = new NetworkChangeReceiver();
   registerReceiver(receiver, filter);
-  ```
-
-- 在Manifest文件中添加权限
-
-  ```groovy
-  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   ```
 
 
@@ -1796,12 +1809,12 @@
 
 ##### *3 自定义广播、有序广播与本地广播
 
-- 点击按钮发送广播：使用Intent发送
+- 发送标准广播：使用`sendBroadcast(intent)`发送
 
   ```java
-  Intent intent = new Intent("com.example.mytest.MyBROADCAST");
+  Intent intent = new Intent("my_action");
   
-  // 安卓8.0+： 所有广播发送须带包名
+  // 安卓8.0+： 所有广播发送须带发送类的包名
   intent.setPackage("com.example.broadcastbestpractice");
   
   sendBroadcast(intent);
@@ -1811,11 +1824,11 @@
 
   ```xml
   <intent-filter>
-      <action android:name="com.example.mybroadcast.MyBROADCAST"/>
+      <action android:name="my_action"/>
   </intent-filter>
   ```
 
-- 发送有序广播，只需改一行
+- 发送有序广播
 
   ```java
   sendOrderedBroadcast(intent, null);
@@ -1844,15 +1857,22 @@
   // 获取实例
   localBroadcastManager = LocalBroadcastManager.getInstance(this);
   
-  // 发送广播(8.0+需设置包名)
-  localBroadcastManager.sendBroadcast(intent);
-  
   // 动态注册(也需要注销)
   intentFilter = new IntentFilter();
-  intentFilter.addAction("com.example.broadcast.LOCAL_BROADCAST");
+  intentFilter.addAction("my_action");
   localReceiver = new LocalReceiver();
   localBroadcastManager.registerReceiver(localReceiver,intentFilter);
+  
+  // 发送广播(8.0+需设置包名)
+  Intent intent = new Intent("my_action");
+  localBroadcastManager.sendBroadcast(intent);
   ```
+
+
+
+### #AlarmManager
+
+##### *1
 
 
 
@@ -3248,6 +3268,26 @@
   }
   ```
 
+  ```java
+  @Database(entities = {Date.class}, version = 1)
+  public abstract class AppDatabase extends RoomDatabase {
+      public abstract DateDao dateDao();
+      private static volatile AppDatabase INSTANCE;
+      static AppDatabase getInstance(final Context context){
+          if(INSTANCE == null){
+              synchronized (AppDatabase.class){
+                  if(INSTANCE == null){
+                      INSTANCE = Room.databaseBuilder(context.getApplicationContext(), AppDatabase.class, "app_database").build();
+                  }
+              }
+          }
+          return INSTANCE;
+      }
+  }
+  ```
+
+  
+
 - 数据库的升级（在`.addMigrations(MIGRATION_1_2)`中）
 
   ```kotlin
@@ -3296,6 +3336,12 @@
   - 可以根据系统的版本自动选择底层如何实现后台任务
   - WorkManager注册的周期性任务不能保证一定会准时执行。系统会将触发时间接近的几个任务放在一起执行以减少CPU被唤醒次数，从而延迟续航
   - 可能在国产手机上不稳定
+
+- WorkManager可处理三种类型的工作
+
+  -   立即执行（甚至是加急执行）
+  -   需要长时间运行（可能超过10“）
+  -   可延期执行/定期执行
 
 - 添加依赖
 
