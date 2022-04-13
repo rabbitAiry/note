@@ -82,19 +82,11 @@
 
 > Inter-Process Communication进程间通信
 
-- [x] ——Binder前
-- [x] ——Binder
-- [x] ——AIDL部分
-- [x] ——AIDL
-- [x] ——2.5前
-- [ ] ——#3前
-
 ##### 2.1 Android IPC简介
 
 - 进程与线程
-  - 线程是CPU调度的最小单元，是一种有限的资源
-  - 进程指一个执行单元，在PC和移动设备上指一个程序或app。一个进程可以包括多个线程
-  - 任何一个系统都有IPC机制。Android中IPC方式有Binder、Socket等
+  - 线程是CPU调度的最小单元，是一种有限的资源。进程指一个执行单元，在PC和移动设备上指一个程序或app。一个进程可以包括多个线程
+  - 任何一个系统都有IPC机制。Android中进程间通信并不完全继承自Linux，其方式包括了Binder、Socket等
 - 使用多进程的场景
   - 因为某些原因需要运行在单独的进程中
   - 加大应用可使用的内存而使用多进程
@@ -105,87 +97,108 @@
 
 ##### 2.2 Android中的多进程模式
 
-- 开启多进程模式
+- 开启多进程
 
-  - 在Android中使用多进程方法：给四大组件在Manifest中指定`android:process`属性，或在native层fork一个进程
+  - 常规下只有一种方法：给四大组件指定`android:process`属性（在Manifest中）
+
+  - 系统会为每个应用分配一个唯一的uid，具有相同uid的应用（或相同的ShareUID且相同签名）才能共享数据，相互访问
 
     ```xml
-    // :代表了包名。以冒号开头的进程都是私有进程
+    :表示私有进程,在ps命令下完整进程名为[包名]:process
     android:process=":test2"
     ```
 
-- 多线程的运行机制
-
-  - 多进程会带来许多问题
-    - 无法通过内存来共享数据，静态成员和单例模式完全失效（不同进程分配给了不同的虚拟机，所以不同进程访问同一个对象的时候实际访问的是该对象的多个副本之一，副本之间互不干扰）
-    - 线程同步机制完全失效（锁的不是同一个对象）
-    - SharedPreference的可靠性下降（不支持两个进程同时执行读写操作）
-    - App会多次创建（基于独立性）
+- 多进程机制
+  - Android为每个进程分配了一个独立的虚拟机，不同的虚拟机在内存分配上有不同的地址空间，这导致在不同虚拟机中访问同一个类的对象会产生多份副本
+  - 多进程机制带来的问题
+      - 无法通过内存来共享数据，静态成员和单例模式完全失效
+      - 线程同步机制完全失效，因为锁的不是同一个对象
+      - SharedPreference的可靠性下降，因为它不是线程安全的
+      - App会多次创建（毕竟是多进程）
+  - 需要通过IPC实现数据交互
 
 ##### 2.3 IPC基础概念介绍
 
-- Serializable接口和Parcelable接口可以完成对象的序列化过程
+- Serializable接口和Parcelable接口可以完成对象的序列化过程。当需要使用Intent和Binder传输数据时就需要用到序列化对象
 
 - Serializable接口
   - java提供，简单但开销大，需要大量IO操作，存储到设备上或者网络传输也更方便
-  - 只需要在类的声明中指定一个id即可自动实现默认的序列化过程（id用于表示类的版本，java会自动生成。手动指定该id可以提高恢复成功率）
+  - 只需要在类的声明中指定一个id即可自动实现默认的序列化过程。只有相同的id才能够成功反序列化（id用于表示类的版本，java会自动生成。手动指定该id可以提高恢复成功率）
+  - 通过ObjectOutputStream和ObjectInputStream完成
   - 经过序列化和反序列化后两者内容一样，但不是同一个对象
-  
+  - 静态成员变量属于类不属于对象，所以不会参与序列化过程
+  - 使用transient标记的成员变量也不会参与序列化过程
+
 - Parcelable接口
-  - android提供的序列化方式，麻烦但效率高。主要用于内存序列化上
+  - android提供的序列化方式，没Serializable那么简便，但效率高。主要用于内存序列化上
   - 只要实现了这个接口，一个类的对象就可以实现序列化并可以通过Intent和Binder传递
-  - CREATOR和private构造器用于反序列化
-  - `writeToParcel()`用于序列化
-  - `describeContents()`用于内容描述，默认返回0，仅当当前对象中存在文件描述符时返回1
-  
+  - 需要重写方法
+      - `private 构造器(Parcel in)`：用于反序列化
+      - `writeToParcel()`：用于序列化
+      - `describeContents()`：仅当前对象中存在文件描述符时返回1
+  - 使用组合的情况：读取parcelable对象，需要传递当前线程de 上下文类加载器
+
+  ```java
+  private User(Parcel in){
+      userId = in.readInt();
+      userName = in.readString();
+      isMale = in.readInt() == 1;
+      book = in.readParcelable(
+          Thread.currentThread()
+          .getContextClassLoader());
+  }
+  ```
+
 - Binder
 
-  - 所有可以在Binder中传输的接口都需要继承IInterface接口
+  - Binder是ServiceManager连接各种Manager和相应的ManagerService的桥梁
+      - 普通Service中的Binder不涉及IPC
+      - Messenger和AIDL用到了Binder涉及IPC的部分
 
-  - transcat过程
+- 使用AIDL
 
-    - 当客户端和服务端位于同一个进程下时，方法调用不会走跨进程的transcat过程；反之则需走transcat过程，使用proxy完成
-    - 使用了id标识在transcat过程中的客户端所请求的是哪个方法。会自动为每个aidl中声明的方法生成id
+    - SDK会自动为我们生成AIDL所对应的Binder类，包括了方法，以及用以标识方法的id
+    - transcat过程：仅针对客户端和服务端位于不同进程的情况
+    - Stub和Stub的内部类Proxy的方法
+        - `DESCRIPTOR`：Binder的唯一标识。一般以Binder的包名+类名表示
+        - `asInterface(android.os.IBinder obj)`：用于将服务端的Binder对象转换为客户端所需要的AIDL接口类型对象。
+        - 如果客户端和服务端位于同一进程，则返回的是服务端的Stub对象本身，否则返回的是系统封装后的Stub.proxy
+        - `asBinder()`：用于返回当前的Binder对象
+        - `onTransact()`：用于服务端。当客户端发起跨进程请求时，远程请求会通过系统底层封装后交由此方法来进行处理
+        - `Proxy#getBookList()`（#表示内部）：此方法运行在客户端。根据id执行不同的操作
+    - AIDL不是实现Binder的必需品，而是快速实现的工具
 
-  - Binder（Stub和Stub的内部代理类Proxy）的属性与方法
+- Binder工作机制
 
-    > Stub就是客户端中假装成服务的客户端helper。Skeleton是服务器端helper
+  <img src="image/Binder工作机制.png"  />
 
-    - DESCRIPTOR：Binder的唯一标识。一般以Binder的包名+类名表示
-    - asInterface：将服务端的Binder对象转换为客户端所需要的AIDL接口类型对象。如果客户端和服务端位于同一进程，则返回的是服务端的Stub对象本身，否则返回的是系统封装后的Stub.proxy
-    - asBinder：用于返回当前的Binder对象
-    - onTransact：此方法运行在服务端中的Binder线程池中。根据方法id处理客户端发起的请求
-    - Proxy#（= Proxy下的）getBookList：此方法运行在客户端。根据id执行不同的操作
-
-  - Binder工作机制
-
-    <img src="image/Binder工作机制.png"  />
-
-    - 当客户端发起请求时，当前线程将会挂起直到服务端进程返回数据
-    - 服务端的Binder应该采用同步的方式实现，因为已经存在于线程池中
-    - linkToDeath与unlinkToDeath：因为服务器端有可能由于某种原因而异常终结，设置死亡代理以防止客户端不知道服务器端暴毙的情况
+  - 当客户端发起请求时，当前线程将会挂起直到服务端进程返回数据
+  - 服务端的Binder应该采用同步的方式实现，因为已经存在于线程池中
+  - linkToDeath与unlinkToDeath：因为服务器端有可能由于某种原因而异常终结，设置死亡代理以防止客户端不知道服务器端暴毙的情况
 
 ##### 2.4 Android中的IPC方式
 
-- 使用Bundle：在Bundle中添加数据并使用Intent发送，在四大组件间通信，对数据类型有限制
+- Bundle
+    - 使用Bundle在四大组件间通信（除ContentProvider）
+    - Bundle通过Intent发送。因为Bundle实现了Parcelable接口，从而实现进程间传递数据，因此对数据类型有限制
+
 - 使用文件共享
+  - Windows上如果一个文件被加入了排斥锁，则其他线程无法对其进行访问
+  - Android基于Linux系统，使得其并发读写可以没有限制地进行，显然任意出现问题
   - 对文件格式无限制，但是难免避开并发性的问题。适用于对同步要求不高的进程之间通信
   - SharedPreference也属于文件的一种，但由于系统对其读写有一定的缓存策略，因此在多进程模式下，系统对它的读写并不可靠，面对高并发读写访问时，有很大几率会丢失数据
 - 使用Messenger
 
   - 可以在不同进程之间传递Message对象。本质是AIDL
   - 只能一个个处理，只能传输Bundle支持的数据类型
-  - :flags: 
 - 使用AIDL：
   - 服务端：创建Service用来监听客户端的连接请求、创建一个AIDL文件用于暴露接口、在Service中实现这些接口
   - 客户端：绑定Service并将其返回的Binder还原、调用AIDL提供的方法
   - AIDL接口的创建
-  - :flags: 实践部分
 - 使用ContentProvider
   - 数据源访问方面功能强大，支持一对多并发数据共享。Binder是其底层实现
   - 将ContentProvider放在独立进程中时，Provider以及访问这个Provider的组件需要声明权限
   - `onCreate()`方法仍会在主线程中执行，其余方法则在单独的线程中执行
-
 - 使用Socket套接字
   - 功能强大，但实现略麻烦
   - 分为流式套接字和用户数据套接字，分别用于TCP和UDP协议
@@ -471,9 +484,30 @@
 
 - 点击事件的分发过程由三个重要的方法共同完成
 
-  - dispatchTouchEvent(MotionEvent ev)：事件分发
-  - onInterceptTouchEvent(MotionEvent ev)：事件拦截
-  - onTouchEvent(MotionEvent ev)：事件处理
+  - dispatchTouchEvent(MotionEvent ev)
+      - 事件分发
+      - 若当前view收到了点击事件，则该方法必定会被调用
+      - 返回结果表示是否消耗当前事件，受当前View的onTouchEvent和下级的dispatchTouchEvent方法的影响
+  - onInterceptTouchEvent(MotionEvent ev)
+      - 事件拦截
+      - 返回结果表示是否拦截了当前事件
+  - onTouchEvent(MotionEvent ev)
+      - 事件处理
+      - 返回结果表示是否消耗当前事件
+      - 如果不消耗，则在同一个事件序列中，当前View无法再接收到事件
+
+  ```java
+  // 伪代码
+  public boolean dispatchTouchEvent(MotionEvent ev){
+  	boolean consume = false;
+      if(onInterceptTouchEvent(ev)){
+          consume = onTouchEvent(ev);
+      }else{
+          consume = child.dispatchTouchEvent(ev);
+      }
+      return consume;
+  }
+  ```
 
 - 点击事件传递规则
 
@@ -490,19 +524,21 @@
     onTouchEvent(group)>> id:2131231196 event:0
     ```
 
-  - `onInterceptTouchEvent()`的返回值：true则拦截给下级View的处理，false则继续
-
-  - `onTouchEvent()`的返回值：true则不用交给上级View处理
-
-      - 从需求来看，如果当前View能够处理点击事件，就不需要传递给上一级View来处理了
-
-  - 如果一个View设置了OnTouchListener，则假若其中的onTouch()返回true，`onTouchEvent()`将不会被调用。可以说OnTouchListener的优先级比`onTouchEvent()`要高
-
-  - OnClickListener的优先级比`onTouchEvent()`要低
-
   - 点击事件的传递顺序：Activity>>Window>>View
 
-  - 但凡容器拦截了ACTION_DOWN事件，后续所有ACTION_MOVE，ACTION_UP事件都会直接交由其处理
+  - 事件拦截
+
+      - 正常情况下，一个事件序列只能被一个View拦截并消耗
+      - 某个View一旦决定拦截，那么这一个事件序列都只能由它来处理都会直接交由其处理，并且它的onInterceptTouchEvent不会再被调用
+
+  - 事件处理
+
+      - 某个View一旦开始处理时间，如果它不消耗ACTION_DOWN事件，那么同一事件序列都不会再交给它来处理，并且事件将重新交由它的父元素去处理
+      - 如果View不消耗除ACTION_DOWN以外的其他事件，那么这个点击事件会消失，此时父元素的`onTouchEvent()`并不会被调用，并且当前View可以持续收到后续的事件，最终这些消失的点击事件会传递给Activity处理
+      - View的`onTouchEvent()`默认都会消耗事件，除非它是不可点击的，即Clickable和LongClickable同时设置为false。当View是不可点击的，onClick()方法也不会被调用
+      - View的enable属性不影响`onTouchEvent()`的返回值
+      - 通过`requestDisalloeInterceptTouchEvent()`可以在子元素中干预父元素的事件分发过程，但是ACTION_DOWN事件除外
+      - 如果一个View设置了OnTouchListener，则假若其中的onTouch()返回true，`onTouchEvent()`将不会被调用。可以说OnTouchListener的优先级比`onTouchEvent()`要高
 
 - 事件分发的源码解析
 
@@ -513,7 +549,6 @@
   - 顶级View对点击事件的分发过程
   - View对点击事件的处理过程
       - 将view设置为disable仍会消耗点击事件
-      - 只有view的Clickable和Long_Clickable同时设置为false，才不会消耗点击事件
       - 消耗点击事件指的是`onTouchEvent()`返回true
 
 
@@ -679,12 +714,33 @@
 ##### 6.1 Drawable简介
 
 - 每个具体的Drawable都有其子类，如ShapeDrawable、BitmapDrawable等
+
 - 内部宽、高的获取：getIntrinsicWidth/Height
   - 不是所有的Drawable都有内部宽高，颜色Drawable就没有
+  
+- px与dp、sp互换
+
+  ```java
+  // dp与px
+  public static int dp2px(Context context, float dpValue){
+  	final float scale = context.getResources()
+          .getDisplayMetrics()
+          .density;
+      return (int)(dpValue*scale+0.5f);
+  }
+  
+  // sp与px
+  public static int sp2px(Context context, float spValue){
+  	final float scale = context.getResources()
+          .getDisplayMetrics()
+          .scaledDensity;
+      return (int)(spValue*scale+0.5f);
+  }
+  ```
 
 ##### 6.2 Drawable的分类
 
-- BitmapDrawable：可以直接引用原始图片，也可以通过XML方式来描述。后者能设置效果
+- Bitmap：可以直接引用原始图片，也可以通过XML方式来描述。后者能设置效果
 
   ```
   android:src=“@[package:]drawable/img”
@@ -696,19 +752,23 @@
   android:gravity			// 位置
   ```
 
-- ShapeDrawable：有四种图形》rectangle、oval、line、ring
+- Shape：有四种图形》rectangle、oval、line、ring
 
   - ring有5个特殊的属性：innerRadius圆环内半径, thickness厚度, innerRadiusRatio内半径占比, thicknessRatio后读占比, useLevel一般为false
 
-- LayerDrawable
+- Layer
 
-  - 对应于\<layer-list>标签
+  - 对应于\<layer-list>标签，可以实现类似ps中图层的效果
   - 通过将不同Drawable放在不同的层上面从而达到叠加后的效果
 
-- StateListDrawable
+- Selector
 
-  - 对应于\<selector>标签
-  - 表示Drawable的集合，每个Drawable都对应折View的一种状态
+  - 对应于\<selector>标签，常见状态
+      - 默认：无需声明
+      - 焦点：state_focused
+      - 点击：state_pressed
+      - 选中：state_sele
+  - 表示Drawable的集合，每个Drawable都对应折View的一种状态，自带逻辑
 
 - LevelListDrawable
 
@@ -739,6 +799,13 @@
 ##### 6.3 自定义Drawable
 
 - 核心就是draw()，通过重写该方法实现自定义。自定义的Drawable无法在XML中使用
+- 使用Canvas
+    - canvas提供的方法
+        - `Canvas.save()`：保存画布
+        - `Canvas.restore()`：合并图层，将在`save()`之后绘制的图像与之前的图像进行合并
+        - `Canvas.translate()`：默认绘图坐标零点位于屏幕左上角，调用该方法后原点移到了（x，y）
+        - `Canvas.rotate()`：将坐标系旋转了一定的角度
+
 
 ##### ex6-3 自定义Drawable
 
@@ -788,19 +855,94 @@
 > API 11+  (3.0+)
 
 - 常用动画类包括了ValueAnimator（xml中标签为`animator`）、ObjectAnimator和AnimatorSet等
+
 - 使用属性动画
   - 通过代码指定或在res/animator/下的xml文件中定义
 
-- 理解插值器TimeInterpolator和估值器TypeEvaluator
+  ```java
+  // ex7_1_popup_menu
+  // ...
+  ObjectAnimator animator3 = ObjectAnimator.ofFloat(
+          mImageViews.getChildAt(3),
+          "translationY",
+          -300F);
+  ObjectAnimator animator4 = ObjectAnimator.ofFloat(
+          mImageViews.getChildAt(4),
+          "translationX",
+          -300F);
+  AnimatorSet set = new AnimatorSet();
+  set.setDuration(500);
+  set.setInterpolator(new BounceInterpolator());
+  set.playTogether(animator0, animator1, animator2, animator3, animator4);
+  set.start();
+  ```
+
+  -   理解插值器TimeInterpolator和估值器TypeEvaluator
+      -   AccelerateInterpolator
+      -   AnticipateInterpolator
+      -   LinearInterpolator
+      -   DecelerateInterpolator
+      -   BounceInterpolator
+      -   OvershootInterpolator
+
   - 两者是实现非线性动画的关键，其中前者决定动画速度属性，后者计算动画某一时刻下的动画属性
 
 - 属性动画的监听器
   - AnimatorListener用于监听动画播放的关键过程：可以监听其开始、结束、取消以及重复播放
   - AnimatorUpdateListener用于监听折动画过程，没播放一帧，就调用该方法一次
 
-- 对任意属性做动画
 - 属性动画的工作原理
-  - 属性动画要求动画作用的对象提供该属性的set方法
+  - 属性动画要求动画作用的对象提供该属性的get、set方法
+
+  - 如果一个属性没有get、set方法，则可以通过自定义一个属性类或者包装类的方式来间接地给该属性增加get、set方法
+
+      ```java
+      private static class WrapperView{
+          private View mTarget;
+          public WrapperView(View target){
+              mTarget = target;
+          }
+          public int getWidth(){
+              return mTarget.getLayoutParams().width;
+          }
+          public int setWidth(int width){
+              mTarget.getLayoutParams.width = width;
+              mTarget.requestLayout();
+          }
+      }
+      ```
+
+  - 如果一个属性没有get、set方法，也可以通过ValueAnimator完成动画
+
+      - ObjectAnimator是ValueAnimator的子类
+      - 使用ValueAnimator中的AnimatorUpdateListener来监听数值的变换
+
+      ```java
+      // ex7_3_drag_down
+      ValueAnimator animator = ValueAnimator.ofInt(start, end);
+      animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+          @Override
+          public void onAnimationUpdate(ValueAnimator animation) {
+              int value = (int) animation.getAnimatedValue();
+              ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+              layoutParams.height = value;
+              view.setLayoutParams(layoutParams);
+          }
+      });
+      return animator;
+      ```
+
+- 布局动画：作用在ViewGroup上，给ViewGroup增加View时添加一个动画过渡效果
+
+    - 最简单的布局动画是在ViewGroup的XML上，使用以下代码来打开布局动画
+
+        ```xml
+        android:animateLayoutChanges="true"
+        ```
+
+    - 使用LayoutAnimationController来自定义一个子View的过渡效果
+
+- 使用Camera类实现一个自定义3D动画效果
 
 
 ##### 7.4 使用动画的注意事项
@@ -815,54 +957,99 @@
 ### #8 理解Window和WindowManager
 
 - Window表示一个窗口的概念，是一个抽象类，具体实现是PhoneWindow
-- 使用WindowManager创建一个Window。Window的具体实现位于WindowManagerService中。Window Manager和WindowManagerService的交互是一个IPC过程
-- Android中所有的视图都是通过Window来呈现的，包括了Activity、Dialog和Toast
-  - 点击事件是Window传递给DecorView再传递给View的
-  - setContentView在底层也是通过Window来完成
-- 每个Window都对应着一个View和一个ViewRootImpl
+    - Android中所有的视图都是通过Window来呈现的，包括了Activity、Dialog和Toast
+
+- 使用WindowManager创建Window
+    - Window的具体实现位于WindowManagerService中
+    - Window Manager和WindowManagerService的交互是一个IPC过程
+
 
 ##### 8.1 Window和WindowManager
 
-- Window属性
-  - Flags参数
-    - FLAG_NOT_FOCUSABLE：表示Window不需要获取焦点
-    - FLAG_NOT_TOUCH_MODAL：此模式下，系统会将当前Window区域以外的单击事件传递给底层的Window，当前Window区域以内的单击事件则自己处理
-    - FLAG_SHOW_WHEN_LOCKED：可以让Window显示在锁屏界面上
+- 添加一个Window
 
-  - Type参数
-    - 应用Window：对于这一个Activity
-    - 子Window：需要附属在特定的父Window之中，如Dialog
-    - 系统Window：需要声明权限才能够创建的Window，如系统状态栏和Toast
+  ```java
+  // 将一个Button添加到屏幕坐标(100,300)的位置
+  mFloatingButton = new Button(this);
+  mFloatingButton.setText("button");
+  mLayoutParams = new WindowManager.LayoutParams(
+      LayoutParams.WRAP_CONTENT, 
+      LayoutParams.WRAP_CONTENT, 
+      0, 0, 
+      PixelFormat.TRANSPARENT);
+  mLayoutParams.flags = 
+      LayoutParams.FLAG_NOT_TOUCH_MODAL | 
+      LayoutParams.FLAG_NOT_FOCUSABLE | 
+      LayoutParams.FLAG_SHOW_WHEN_LOCKED;
+  mLayoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+  mLayoutParams.x = 100;
+  mLayoutParams.y = 300;
+  mWindowManager.addView(mFloatingButton, 
+                         mLayoutParams)
+  ```
 
-  - z-ordered：层级范围
+- Window属性：常用Flag参数
 
-- 只能通过WindowManager来访问Window
-- Window Manager常用的三个方法
-  - addView()添加
-  - updateViewLayout()更新
-  - removeView()移除
+  - FLAG_NOT_FOCUSABLE：表示Window不需要获取焦点
+  - FLAG_NOT_TOUCH_MODAL：此模式下，系统会将当前Window区域以外的单击事件传递给底层的Window，当前Window区域以内的单击事件则自己处理
+  - FLAG_SHOW_WHEN_LOCKED：可以让Window显示在锁屏界面上
 
+- Window的3种类型type
+  - 应用Window：对应一个Activity
+  - 子Window：不能单独存在，需要附属在特定的父Window之中，如Dialog
+  - 系统Window：需要声明权限才能够创建的Window，如系统状态栏和Toast
+
+- z-ordered：每个Window都会有对应的z-ordered
+
+- WindowManager的三大操作：添加、更新、移除View
 
 ##### 8.2 Window的内部机制
 
-- Window的添加过程
-- Window的删除过程
-- Window的更新过程
+-   Window不是实际存在的
+    -   每一个Window都对应着一个View和一个ViewRootImpl
+    -   Window和View之间通过ViewRootImpl来建立联系
+    -   View是Window的实体
+    -   在实际使用中，对View的访问只能通过WindowManager
+-   WindowManager是一个接口
+    -   WindowManagerImpl是它的实现
+    -   WindowManagerImpl把三大操作交给了WindowManagerGlobal来处理。这种工作模式是桥接模式
+-   WindowManagerGlobal
+    -   包括了一些重要的列表，存储了所有Window对应的：view、ViewRootImpl、Params、正在被删除的View对象
+- Window的添加View过程
+    1.  检查参数是否合法，如果是子Window则需要调整一些布局参数
+    2.  创建ViewRootImpl并将View添加到列表中
+    3.  通过ViewRootImpl来更新界面并完成Window的添加过程
+-   Window的删除View过程（异步删除romoveView，同步删除removeViewImmediate）
+    1.  使用`findViewLocked()`找到待删除View的索引
+    2.  使用`removeViewLocked()`删除
+
+-   Window的更新View过程
 
 ##### 8.3 Window的创建过程
 
 - Activity的Window创建过程
-  - setContentView步骤
-    - 如果没有DecorView，则创建
-    - 将View添加到DecorView的mContentParent
-    - 回调Activity的onContentChanged()通知Activity视图已经发生变化
-
+  - Activity的启动过程
+    - 最终会由ActivityThread中的`performLaunchActivity()`来完成整个启动过程
+    - 在上述方法内部，会通过类加载器创建Activity的实例对象，并调用attach方法为其关联运行过程中所依赖的一系列上下文环境变量
+    - 在attach方法里，创建了Activity所属的Window对象并为其设置回调接口
+    - Window对象通过PolicyManager的`makeNewWindow()`获得
+- Activity的视图由`setContentView()`提供
+  - 流程概述：将View交给Window的`setContentView()`处理，然后初始化ActionBar
+  - Window的`setContentView()`中
+      - 如果没有DecorView，则创建
+      - 将View添加到DecorView的mContentParent
+      - 回调Activity的onContentChanged()通知Activity视图已经发生变化
 - Dialog的Window创建过程
-  - 创建Window
-  - 初始化DecorView并将Dialog的视图添加到DecorView中
-  - 将DecorView添加到Window中显示
-
+  1.  创建Window：创建方式同Activity
+  2.  初始化DecorView并将Dialog的视图添加到DecorView中：同Activity
+  3.  将DecorView添加到Window中显示
+      -   在Dialog的`show()`中，会通过WindowManager将DecorView添加到Window中
+      -   当Dialog被关闭时，移除DecorView
+      -   默认Dialog只能使用Activity的Context，系统级Window的Dialog则无限制
 - Toast的Window创建过程
+    - Toast提供了`show()`和`cancel()`来控制Toast的显示，它们的内部都是一个IPC过程，通过NMS实现
+    - Toast内部有两类IPC过程，第一类是Toast访问NotificationManagerService（下称NMS），第二类是NMS回调Toast里的TN接口
+
 
 
 
@@ -907,28 +1094,85 @@
 
 ### #10 Android的消息机制
 
-- 主要是指Handler运行机制。Handler运行需要底层的MessageQueue和Looper支撑，前者使用单链表的数据结构存储，后者以无限循环的形式去查找是否有新消息
-  - Looper有一个特殊的概念：ThreadLocal
-    - 用于在每个线程中互不干扰地存储并提供数据
-    - 通过ThreadLocal可以获取每个线程中的Looper
-  - 线程默认是没有Looper的，而ActivityThread在被创建时就会初始化Looper
-
 ##### 10.1 Android的消息机制概述
 
-- Handler主要作用是将一个任务切换到某个指定的线程中去执行
+- 子线程不能访问UI
+    - Android的UI控件不是线程安全的，如果在多线程中并发访问可能会导致UI控件处于不可预期的状态
+    - 假若对UI控件的访问加上锁机制
+        - 让UI的访问逻辑复杂
+        - 降低UI访问效率
+
 
 ##### 10.2 Android的消息机制分析
 
-- ThreadLocal的工作原理
-- 消息队列的工作原理
-- Looper的工作原理
-- Handler的工作原理
+>   即Handler运行机制
+
+- ThreadLocal
+
+    - 在每个线程中独立存储数据。当不同线程访问同一个ThreadLocal中的get()方法时，ThreadLocal内部会从各自的线程中取出一个数组，然后再从数组中根据当前ThreadLocal的索引去查找出对应的value值
+    - 通过ThreadLocal可以获取每个线程中的Looper
+
+    ```java
+    // 不同线程访问同一个ThreadLocal
+    ThreadLocal<Boolean> local = new ThreadLocal<>();
+    
+    local.set(true);
+    Log.d(TAG, local.get())
+        
+    new Thread("Thread#1"){()->
+    	{
+        	local.set(false);
+        	Log.d(TAG, local.get())
+    }}.start;
+    
+    new Thread("Thread#2"){()->
+    	{
+        	Log.d(TAG, local.get())
+    }}.start;
+    
+    /* 输出结果：
+    
+    Thread#main : true
+    Thread#1 : false
+    Thread#2 : null
+    */
+    ```
+
+- MessageQueue消息队列
+
+    - 存储了一组消息，以队列的形式对外提供插入和删除的工作
+        - `enqueueMessage()`：插入一条消息
+        - `next()`：取出一条消息（出队），是一个无限循环的方法，如果消息队列中没有消息，那么`next()`会一致阻塞
+    - 通过单链表实现
+
+- Looper消息循环
+
+    - Looper以死循环的形式从MessageQueue中查看是否有新消息，有则处理，无则阻塞
+    - 通过`msg.target.dispatchMessage(msg)`令handler处理消息
+    - 线程默认下没有Looper，如果需要使用Handler则需要为线程创建Looper
+        - 每个线程中最多只有一个Looper对象
+        - 使用`Looper.prepare()`创建一个Looper
+        - 使用`Looper.loop()`开启消息循环。`loop()`是一个死循环，唯一跳出循环的方式是MessageQueue的`next()`返回null。
+        - 使用quit直接退出Looper，使用quitSafety则把该时间下理应完成的任务完成后才退出。两者原理也是让MessageQueue的`next()`返回null
+        - Looper退出后，线程就会立刻终止
+    - UI线程创建时就已初始化了Looper
+    
+- Handler工作原理
+
+    - post的一系列方法最终是通过调用send的一系列方法实现
+    - send的一系列方法最终是通过消息队列的`enqueueMessage()`实现插入一条消息
+    - 消息队列的`next()`会返回这条消息给Looper，Looper处理后会将消息交由Handler处理，即Handler的`dispatchMessage()`会被调用
+    - `runOnUIThread()`原理：使用了Hanler的`post()`
+
 
 ##### 10.3 主线程的消息循环
 
-##### ex10.2 ThreadLocal的工作原理
-
-- p391:flags:
+-   Android主线程ActivityThread，入口方法为main。在`main()`中：
+    -   通过`Looper.prepareMainLooper()`来创建主线程的Looper以及MessageQueue
+    -   通过`Looper.loop()`来开启主线程的消息循环
+-   ActivityThread内部的Handler：ActivityThread.H
+    -   定义了一组消息类型，主要包含了四大组件的启动和停止等过程
+-   ActivityThread通过ApplicationThread和AMS进行进程间通信
 
 
 
@@ -938,26 +1182,38 @@
 
 ##### 11.1 主线程和子线程
 
-- java中默认一个进程下只有一个线程，这个线程就是主线程。除了主线程外的线程都是子线程，也叫工作线程
-- Android中，主线程也叫UI线程
+- 线程是操作系统调度的最小单元，也是一种受限的系统资源，不能无限制地产生
+- 线程数量应该小于CPU核心数
+- 除了主线程（UI线程）以外的线程都是子线程
 
 ##### 11.2 Android中的线程形态
 
-- AsyncTask
-  - 封装了线程池和Handler
+- AsyncTask：封装了Thread和Handler
+  - 主要是为了方便开发者在子线程中更新UI
   - onPreExecute(), doInBackground(), onProgressUpdate(), onPostExecute()
   - 使用限制
-    - AsyncTask类必须在主线程中加载、类必须在主线程中创建、execute方法必须在主线程中调用
+    - AsyncTask类必须在主线程中加载（安卓5.0+已经帮我们完成了这个过程）、类必须在主线程中创建、execute方法必须在主线程中调用
     - 不要在程序中直接调用onPreExecute()、onPostExecute()、doInBackground()和onPostExecute()
-    - 一个AsyncTask对象只能执行一次（即只能调用一次execute方法）
-
+    - 一个AsyncTask对象只能执行一次，即只能调用一次execute方法；但可以有多个AsyncTask
 - AsyncTask的工作原理
-- HandlerThread
-  - 继承了Thread，具有消息循环的线程，在其内部可以使用Handler
+    - 默认情况下串行执行，采用其executeOnExecutor方法以令其并行
+    - 两个线程池
+        - SerialExecutor用于队伍的排队
+        - THREAD_POOL_EXECUTOR用于真正地执行任务
 
+    - Handler
+        - 通过Message让Handler执行UI任务
+
+- HandlerThread
+  - 可以使用Handler的Thread
+  - 原理：在run方法中通过`Looper.prepare()`来创建消息队列，并通过`Looper.loop()`来开启消息循环
+  - 需要调用其quit或quitSafety方法来终止线程的执行
+  - 使用场景：IntentService
 - IntentService
   - 系统对其进行了封装使其可以更方便地执行后台任务，内部采用HandlerThread来执行任务
-  - IntentService是一种服务，所以其优先级比单纯的线程要高。是一个抽象类
+  - IntentService是Service的子类，所以其优先级比单纯的线程要高。是一个抽象类
+  - 传递给IntentService的Intent会被传给其HandlerThread中处理，在`onHandleIntent()`中处理不同的后台任务
+  - 在`onHandleIntent()`执行结束后，IntentService会调用`stopSelf(int startId)`来尝试停止服务，这里的尝试意味着会等待所有任务都结束了才停止
 
 
 ##### 11.3 Android中的线程池
@@ -968,7 +1224,6 @@
     - 重用线程池中的线程
     - 有效控制线程池的最大并发数，避免大量的线程之间相互抢占系统资源而导致的阻塞现象
     - 能够对线程进行简单的管理，并提供定时执行以及指定间隔循环执行等功能
-
 - ThreadPoolExecutor：线程池实现
   - 参数
     - corePoolSize：线程池的核心线程数
@@ -977,13 +1232,23 @@
     - unit：用于指定keepAliveTime参数的单位。常用》TimeUnit.SECONDS、TimeUnit.MILLISECONDS
     - workQueue：线程池中的任务队列
     - threadFactory：线程工厂，为线程池提供创建新线程的功能
-    - RejectedExecutionHandler handler
-
-- 线程池的分类
-  - FixedThreadPool：线程数量固定的线程池
-  - CachedThreadPool：线程数量不定的线程池。只有非核心线程，且最大线程数为Integer.MAX_VALUE
-  - ScheduledThreadPool：核心线程数量是固定的，而非核心线程数是没有限制的，并且当非核心线程闲置时会被立即回收
-  - SingleThreadExecutor：只有一个核心线程，确保所有的任务都在该同一个线程中按顺序执行
+    - RejectedExecutionHandler handler：线程池无法执行新任务时，调用handler的rejectedExecution方法来通知调用者。该方法可能会抛出RejectedExecutionException
+- 常见的4种线程池
+  - FixedThreadPool
+      - 线程数量固定的线程池，只有核心线程
+      - 任务队列也无大小限制
+      - 因为线程不会被回收，所以能够更快地响应外界请求
+  - CachedThreadPool
+      - 线程数量不定的线程池。只有非核心线程，且最大线程数为Integer.MAX_VALUE（相对于无限大）
+      - 所有的空闲线程都会有超时机制，默认为60秒
+      - 其队列相对于一个空集合，这会导致所有的任务都会被立即执行（SynchronousQueue）
+      - 适用于执行大量的耗时较少的任务
+  - ScheduledThreadPool
+      - 核心线程数量是固定的，而非核心线程数是没有限制的
+      - 当非核心线程闲置时会被立即回收
+      - 适用于执行定时任务和具有固定周期的重复任务
+  - SingleThreadExecutor
+      - 只有一个核心线程，确保所有的任务都在该同一个线程中按顺序执行，使得在这些任务之间不需要处理线程同步的问题
 
 
 
@@ -1156,6 +1421,3 @@
 
 ##### 15.3 提高程序的可维护性
 
-
-
-[TOC]

@@ -1,89 +1,28 @@
 # Java
 
-> Thinking in Java  x  Head First Java 笔记
+> Thinking in Java
+>
+> Head First Java
+>
+> Java编程的逻辑
+>
+> 网络内容补充
+
+
 
 [TOC]
 
-### #1 对象
+### #1 控制程序流
 
-##### 用引用操纵对象
+-   注释文档Javadoc
 
-- 引用和对象相当于遥控器和电视机，使用引用来操控对象
+    - Javadoc是用于提取注释（`/** ... */`）的工具，输出一份HTML文件
 
-  - 只需遥控器，就可以改变电视机音量大小
-  - 遥控器可以单独存在
+    - Javadoc只为public和protected成员进行文档注释
 
-  ```java
-  String s;
-  String s = "abcd";
-  ```
+    - 能够在注释中嵌入html
 
-- new表示创建对象
-
-##### 存储数据的地方
-
-- 寄存器：数量极其有限
-- 堆栈：位于RAM中，用于存储方法
-- 堆：一种通用的内存池，位于RAM中，用于存放所有的JAVA对象
-- 静态存储：在固定位置的RAM中，存放程序运行时一直存在的数据
-- 常量存储：存放在代码内部。嵌入式系统下可以选择存放ROM中
-- 非RAM存储：数据存活于程序之外
-
-##### 数据类型
-
-- 基本类型
-  - boolean、char、byte、short、int、long、float、double、void
-  - 这些变量不大，但存储在堆中不如存储在堆栈中高效，所以java提供了不用new来创建变量的方法创建了并非是“引用”的自动”变量“
-  - 基本类型具有包装器类，如int类型和Integer类。使用包装器类使得可以在堆中创建一个非基本对象来表示基本类型
-- 高精度数字
-  - BigInteger和BigDecimal
-  - 必须以方法调用的方式取代运算符方式来实现，这是以速度换取了精度（运算慢）
-- 数组初始化
-
-##### 对象内部
-
-- 作用域scope
-  - 作用域决定了在其内定义的变量名的可见性和生命周期
-  - 对象作用域
-    - java对象不具备和基本类型一样的生命周期。当其引用作用域结束时，其指向对象仍继续占据内存空间
-    - java有一个“垃圾回收器”，用于监视new创建的所有对象，并辨别那些不会再被引用的对象，随后会释放这些内存空间，以便供其他对象的使用
-  
-- 成员变量和方法（域和方法 field and method）
-  - 如果成员变量是一个对象的引用，则有必要使用构造器
-  
-- 基本成员默认值
-
-  - 若类的某个成员是基本类型，即时没有进行初始化，java也会确保其获得一个默认值（仅 成员变量 拥有默认值）
-
-    | 基本类型 | 默认值   |
-    | -------- | -------- |
-    | boolean  | false    |
-    | char     | null     |
-    | byte     | (byte)0  |
-    | short    | (short)0 |
-    | int      | 0        |
-    | long     | 0L       |
-    | float    | 0.0f     |
-    | double   | 0.0d     |
-
-##### 第一个java程序
-
-- 名字可视化
-
-  ```
-  如 com.example.TODO, java.util.ArrayList
-  ```
-
-- 注释文档Javadoc
-
-  - Javadoc是用于提取注释（`/** ... */`）的工具，输出一份HTML文件
-  - Javadoc只为public和protected成员进行文档注释
-  - 能够在注释中嵌入html
-  - 可以添加一些标签，如`@see`链接到其他文档、`@version`版本信息、`@param`参数
-
-[TOC]
-
-### #2 控制程序流
+    - 可以添加一些标签，如`@see`链接到其他文档、`@version`版本信息、`@param`参数
 
 ##### 操作符
 
@@ -141,9 +80,85 @@
   }
   ```
 
+##### 方法
+
+-   java中传递引用数据类型方式是值传递，无论是基本数据类型还是对象（而不是引用传递）
+
+    -   值传递
+        -   指在调用函数时将实际函数复制一份到函数中
+        -   如果在函数中对参数进行修改，不会影响到实际参数
+        -   对象的传递，复制的是其引用（地址值），并不是引用指向的存在于堆内存中的实际对象
+        -   可以改变对象的成员，但无法改变对象（如将对象置null，或更换对象、值）
+    -   引用传递：将实际参数的地址直接传递到函数中
+
+    ```java
+    class MyString{
+        String s;
+    }
+    
+    public static void main(String[] args) throws InterruptedException {
+        Temp temp = new Temp();
+        temp.s.s = "good";
+        temp.setNull1(temp.s);
+        System.out.println(temp.s.s);
+        temp.setNull2(temp.s);
+        System.out.println(temp.s.s);
+    }
+    
+    void setNull1(MyString val){
+        val = null;
+    }
+    
+    void setNull2(MyString val){
+        val.s = null;
+    }
+    
+    /* output:
+    good
+    
+    */
+    ```
+
+    
+
+
+
 [TOC]
 
-### #3 初始化和清除
+### #2 类与对象
+
+##### 引用与存储
+
+-   引用和对象相当于遥控器和电视机，使用引用来操控对象
+
+    - 只需遥控器，就可以改变电视机音量大小
+    - 遥控器可以单独存在
+
+    ```java
+    String s;
+    String s = "abcd";
+    ```
+
+- 数据类型
+
+    - boolean、char、byte、short、int、long、float、double、void
+    - 这些变量不大，但存储在堆中不如存储在堆栈中高效，所以java提供了不用new来创建变量的方法创建了并非是“引用”的自动”变量“
+    - 基本类型具有包装器类，如int类型和Integer类。使用包装器类使得可以在堆中创建一个非基本对象来表示基本类型
+    - 高精度数字：BigInteger和BigDecimal
+
+-   存储数据的地方
+
+    - 寄存器：数量极其有限
+    - 内存RAM
+        - 栈：存储函数的局部变量
+        - 堆：存放动态分配的对象
+        - 方法区：存放类的信息
+
+    - 静态存储：在固定位置的RAM中，存放程序运行时一直存在的数据
+
+    - 常量存储：存放在代码内部。嵌入式系统下可以选择存放ROM中
+
+    - 非RAM存储：数据存活于程序之外
 
 ##### static关键字
 
@@ -153,38 +168,54 @@
 
 - java没有东西是全局的，静态类方法最接近全局
 - java虚拟机会加载某个类是因为第一次有人要创建该类的新实例，或是使用该类的静态方法或变量。静态变量是在类被加载时初始化的
-- 静态的import`import static java.lang.Math.*`
+- 静态的import：`import static java.lang.Math.*`
 
-##### 构造器
+##### 类加载过程
+
+-   类的加载是指将类的相关信息加载到内存。在java中，类是动态加载的
+-   类加载过程
+    -   分配内存保存类的信息
+    -   给类变量赋默认值
+    -   加载父类
+    -   设置父子关系
+    -   执行类初始化代码
+
+##### 对象创建过程
+
+- 对象创建过程包括
+
+  - 分配内存
+  - 对所有实例变量赋予默认值
+  - 执行实例初始化代码
 
 - 在Java中，**初始化**和创建无法分离
 
   - java会自动初始化，且在使用构造器之前（大部分初始值都为0）
 
-  - 初始化的内容包括对象的初始化，调用他们的构造器
+  - 初始化的内容包括对象的初始化
 
-  - 静态变量会在该类的任何对象创建之前就完成初始化。静态变量会在该类的任何静态方法执行之前被初始化。int类型默认赋值0
+      - 静态变量会在该类的任何对象创建之前就完成初始化
+      - 静态变量会在该类的任何静态方法执行之前被初始化
+      - 静态子句是多个静态初始化动作的集合
+      - 如果用不到包含静态变量的类，则不会被初始化
+      - 成员变量会在调用构造器前初始化
 
-  - 初始化子句、静态子句：多个静态初始化动作的集合，只会在其他类使用该类之前就执行初始化，且只执行一次
-
-    - 静态子句（静态初始化程序）前会有static
-
-    ```java
-    class Cups { 
-      static Cup c1; 
-      static Cup c2; 
+      ```java
+      class Cups { 
+          static Cup c1; 
+          static Cup c2; 
       
-      // 静态子句
-      static { 
-        c1 = new Cup(1); 
-        c2 = new Cup(2);
-    	}
-    	Cups() { 
-        System.out.println("Cups()");
-    	}
-    }
-    ```
-    
+          // 静态子句
+          static { 
+              c1 = new Cup(1); 
+              c2 = new Cup(2);
+          }
+          Cups() { 
+              System.out.println("Cups()");
+          }
+      }
+      ```
+
   - 初始化顺序：①调用当前类的父类构造器 ②当前类的成员变量初始化过程 ③当前类的构造器
 
 - 仅类中没有构造器时，编译器会自动创建一个无参构造器
@@ -229,6 +260,8 @@
 
 ##### 清除
 
+- java对象不具备和基本类型一样的生命周期。当其引用作用域结束时，其指向对象仍继续占据内存空间
+
 - 生命周期与作用域
 
   - 只要变量的堆栈块还在堆栈上，局部变量就还活着
@@ -265,11 +298,56 @@
   life = null;
   ```
 
-- 
-
 
 
 [TOC]
+
+### #3 常用基础类
+
+##### 包装类
+
+-   Java有8种基础类型，每种基础类型对应一个包装类
+    -   6种数据类型包装类都有一个共同的父类Number
+-   装箱、拆箱
+    -   将基本类型转换为包装类的过程，一般称为装箱，反之称为拆箱
+    -   Java5+引入了自动装拆箱，可以直接相互赋值
+    -   自动装拆箱是编译器提供的能力，最后还是会替换为对应的valueOf和intValue方法
+    -   使用`valueOf()`而不是new以创建包装类：除部分包装类外，都会缓存包装类对象，以减少需要创建对象的次数，节省空间
+-   包装类特性
+    -   重写了Object类的方法
+        -   `equals(Object obj)`：皆反映了对象间逻辑相等关系
+        -   `hashCode()`：逻辑相等的对象的哈希值必须一样。如果equals方法返回true，则hashCode必须一样
+        -   `toString() `
+    -   实现了Comparable
+    -   与String相关：相互转换
+    -   提供了常用变量
+-   不可变性：包装类的实例对象一旦创建，就没有办法修改了
+    -   不可变性的实现
+        -   所有包装类都声明为final，不能被继承
+        -   内部基本类型值都是private final的
+        -   没有定义setter方法
+    -   不可变是为了使得程序更为简单安全，不会被意外更改，可以安全地共享数据
+
+##### Integer的二进制算法
+
+>   Long与Integer类似
+>
+>   位操作能够充分利用CPU
+
+-   位翻转：int的二进制形式种进行左右互换
+-   循环移位
+-   缓存-享元模式
+
+##### Character
+
+-   Unicode基础
+-   检查code point和char
+-   code point与char互换
+-   按code point处理char数组或序列
+-   字符属性
+-   字符转换
+
+##### String
 
 ### #4 访问权限
 
@@ -296,25 +374,103 @@
 ##### 继承
 
 - 所有类会隐式地从object类进行继承
+
 - 优先从当前类中寻找被指定的方法，可以通过super关键字来调用父类方法
+
+    ```java
+    // test5_1
+    class Base{
+        public Base(){
+            test();
+        }
+        public void test(){}
+    }
+    
+    class Child extends Base{
+        private int a = 123;
+        public Child(){}
+        public void test(){
+            System.out.println(a);
+        }
+        
+        public static void main(String[] args){
+            Child c = new Child();
+            c.test();
+        }
+    }
+    
+    /* output:
+    0
+    123
+    
+    */
+    ```
+
 - java会在子类的构造器中插入对父类构造器的调用。所以调用子类构造器时，会先调用父类构造器，再执行子类构造器的操作。可以使用super指定调用哪一个构造器
+
 - "is-a(是一个)"的关系是用继承来表达的，可以认为子类是对父类的取代；"has-a"的关系使用组合来表达；"is-like-a"的关系则使用接口来表示，这意味着即时向上转型，也能调用子类额外新增的方法
 
 - 向上转型：子类是父类的一种类型
 
   ```java
-  class Instrument{
-  	static void tune(Instrument i){
-  		// ...
-  	}
+  // 正常运行
+  Base b = new Child();
+  Child c = (Child)b;
+  
+  // 运行时会抛出异常
+  Base b = new Base();
+  Child c = (Child)b;
+  ```
+  
+- 变量与继承
+
+  - private变量与方法只能在类内访问。如：子类不能访问分类的private变量
+  - 对于public变量，子类能够通过super明确指定访问父类的变量
+  - 静态绑定
+    - 静态绑定：当通过b（静态类型Base）访问时，访问的是Base的变量和方法，当通过c（静态类型Child）访问时，访问的是Child的变量和方法
+    - 静态绑定在程序编译阶段即可决定，而动态绑定发生在程序运行时
+
+  ```java
+  // test5_2
+  class Base{
+      public static String s = "static_base";
+      public String m = "base";
+      public static void staticTest(){
+          System.out.println("base static:"+s);
+      }
   }
   
-  public class Wind extends Instrument{
-  	public static void main(String[] args){
-  		Instrument.tune(new Wind());
-  	}
+  class Child extends Base{
+      public static String s = "child_base";
+      public String m = "child";
+      public static void staticTest(){
+          System.out.println("child static:"+s);
+      }
   }
+  
+  public static void main(String[] args){
+      Child c = new Child();
+      Base b = c;
+      System.out.println(b.s);
+      System.out.println(b.m);
+      b.staticTest();
+      System.out.println(c.s);
+      System.out.println(c.m);
+      c.staticTest(); 
+  }
+  
+  /* output:
+  static_base
+  base
+  base static:static_base
+  child_base
+  child
+  child static:child_base
+  
+  */
   ```
+
+  
 
 ##### 关键字final
 
@@ -440,7 +596,7 @@
 
 [TOC]
 
-### #7 接口与内部类
+### #7 接口、内部类、枚举
 
 ##### 接口
 
@@ -459,31 +615,66 @@
 
 - 内部类与组合是不同的概念
   - 与一般的类不同，内部类可以被声明为private或protected
-  - 使用内部类的理由：返回引用、创建了不是公用的工具类
+  - 使用内部类的理由
+      - 可以实现对外部的完全隐藏，有更好的封装性
+      - 返回引用、创建了不是公用的工具类
   
-- 几种内部类
+- 4种内部类
 
-  - 局部内部类：这个类在方法的作用域内，可以访问的常量和当前方法一样
-  - 匿名类对象：常用于return中，可以是一个抽象类，在该抽象类的return中，直接new一个子类并向上转型，并补上参数和方法
-    - 匿名内部类若使用外部变量，则要求参数是final的（不包括传递参数）
-    - 和匿名内部类相比，局部内部类允许有自己的构造器，但是局部内部类的方法在外是不可见的
+  - 静态内部类：使用static修饰
 
-- 内部类可以访问外围类（即包含着这个内部类的类）的成员，即内部类能够与外部类联系
+      -   只可以访问外部类的静态变量和方法，不可以访问实例变量和方法
+      -   在当前外部类中，可以直接调用静态内部类的方法；其他类中则需要先创建一个内部类
+      -   使用场景：与外部类关系密切，且不依赖于外部类实例
+      -   例子：LinkedList中的私有静态内部类Node
 
-  - 通过一个特殊的this引用，可以连接到外部类对象
+      ```java
+      // Outer$StaticInner
+      Outer.StaticInner si = new Outer.StaticInner();
+      ```
 
-- 嵌套类
+  - 成员内部类
 
-  - 若不需要联系，可以将内部类声明为static，此时内部类称为嵌套类。不能从嵌套类对象中访问非static的外围对象
-  - 嵌套类也可以置于接口内部，因为它是static的
-  - 可以使用嵌套类来放置测试代码（书中建议为每个类都写一个main()方法，提到了使用嵌套类更省事）
+      - 可以访问外部类所有变量
+      - 成员内部类中不可以定义静态变量和方法（常量除外，即final变量）
+      - 在当前外部类中，需要先创建内部类才能访问；在其他类在，则需要先创建一个外部类才能新建内部类
+      - 使用场景：与外部类关系密切，且需要访问外部类的实例变量或方法
+      - 例子：LinkedList中返回的Iterator接口
 
-- 必须使用外部类的实例来生成内部类（嵌套类除外）
+      ```java
+      // Outer$Inner
+      Outer outer = new Outer();
+      Outer.Inner inner = outer.new Inner();
+      ```
 
-  ```java
-  Outer outer = new Outer();
-  Outer.Inner inner = outer.new Inner();
-  ```
+  - 方法内部类
+
+      - 这个类在方法的作用域内，可以访问的类与方法的变量范围和当前方法一样
+      - 访问方法中的参数时可以直接访问，但访问方法中的局部变量时，只能访问被声明了final的局部变量
+      - 只能在定义的方法内被使用
+
+  - 匿名类对象
+
+    - 可访问的参数与方法内部类一致
+    - 常作为某个类的匿名子类
+    - 使用场景：return中
+    - 例子：Arrays.sort中的Comparator
+
+    ```java
+    Arrays.sort(strs, new Comparator<String>(){
+    	@Override
+        public int compare(String o1, String o2){
+            return o1.compareToIgnoreCase(o2);
+        }
+    })
+    ```
+
+- 内部类的实现
+
+  - 在JVM中无内部类概念，每个内部类最后都会被编译为一个独立的类
+  - 使用$表示内部类
+  - 访问成员变量或方法的原理：使用外部类的对象来实现内部类的初始化，并为外部类被访问的变量或方法自动生成get方法
+  - 对于方法内部类，则把方法中的参数也传递给了内部类，方法中的final变量则直接生成在内部类中
 
 - 继承自内部类
 
@@ -494,11 +685,11 @@
       class Inner {}
     }
     class InheritInner extends WithInner.Inner { 
-      // 不能直接初始化
-      // InheritInner(){}
-      InheritInner(WithInner wi) {
-        wi.super();
-    	}
+        // 不能直接初始化
+        // InheritInner(){}
+        InheritInner(WithInner wi) {
+        	wi.super();
+        }
     }
     ```
 
@@ -506,12 +697,6 @@
 
   - 子类的内部类与父类的内部类是两个独立的实体
   - 可以在子类中的内部类继承自内部类的方法让子类，从而实现重载
-
-- 内部类标识符
-
-  - 每个类都会产生一个.class文件，其中包含了如何创建该类对象的全部信息。接口、内部类也必须生成一个.class文件
-  - 内部类的文件命名
-    - 外围类的名字加上`$`，再加上数字类标识符，以及内部类的名字
 
 - 内部类的作用/应用场景
 
@@ -523,8 +708,61 @@
 
   - 闭包是一个可调用的对象，包含了创建它的作用域（如：外围类）
   - 通过内部类提供闭包的功能比指针更灵活、安全
-  
-- 控制框架与内部类
+
+##### 枚举
+
+-   使用枚举让代码更为简洁
+
+    -   枚举变量的`toString()`或`name()`会返回其字面值
+    -   枚举变量的`ordinal()`或枚举类型的`valueOf()`会返回枚举值在声明式的顺序
+        -   枚举类型也实现了Java API中的Comparable接口，可以通过compareTo与其他枚举值进行比较，比较的是`ordinal()`的大小
+        -   可以用于switch语句，switch语句内不需要前缀
+    -   枚举变量可以使用equals或==进行比较，结果一致
+    -   枚举类型的`values()`返回枚举值的数组
+
+    ```java
+    public enum Size{
+    	SMALL, MEDIUM, LARGE
+    }
+    ```
+
+    ```
+    Size size = Size.MEDIUM
+    ```
+
+-   枚举类原理
+
+    -   枚举类是final的，其父类式Enum\<T>
+    -   枚举类的构造方法是私有的
+
+-   拓展枚举的用法
+
+    -   枚举值的定义要放在最上面，并于枚举值和代码之间使用分号隔开
+
+    ```java
+    public enum Size{
+    	SMALL("S","小号"), 
+        MEDIUM("M","中号"),
+        LARGE("L","大号");
+        
+        private String abbr;
+        private String title;
+        private Size(String abbr, String title){
+            this.abbr = abbr;
+            this.title = title;
+        }
+        
+        public String getAbbr(){
+            return abbr;
+        }
+        
+    	public String getTitle(){
+            return title;
+        }
+    }
+    ```
+
+    
 
 
 
@@ -532,22 +770,84 @@
 
 ### #8 异常与错误处理
 
+##### 异常
+
+>   类图
+>
+>   -   Throwable
+>
+>       -   Error
+>
+>       -   Exception
+>           -   受控异常
+>           -   RuntimeException（非受检异常unchecked exception）
+
+-   Error
+    -   出现时，程序无法恢复，只能重启
+    -   包括了OOMError、StackOverflowError等
+
+-   方法重写与异常
+    -   -   
+-   RuntimeException：不需被检查的异常
+    - 其子类包括ClassCastException和NullPointerException等
+    - 这些异常大多发生在代码逻辑有误，所以不被编译器检测到（编译器不要求你对抛出这种异常的方法使用try catch）
+    - 自定义异常：必须从已有的异常类继承（可以是Exception类）
+
 ##### 异常的抛出与捕获
 
-- try-catch
+- 异常的处理
 
-  - try区块放入的是可能导致错误的语句
-  - catch关键字后的就是异常处理程序Exception handler，也是上述“恰当的地点”。当异常被抛出时，异常处理机制将负责搜索参数与异常类型相匹配的第一个处理程序，然后加入catch子句执行
-  - 异常也可以是多态的
+  - Java首先创建一个异常对象，然后查看谁能处理这个异常
+  - 异常不断查看上一层的函数是否能够处理异常
+  - 如果没有代码能够处理异常，则启用默认处理机制，即：打印异常栈信息到屏幕上，并退出程序
+  
+- 异常的产生
 
-- RuntimeException：不需被检查的异常
+  - 通过new创建一个异常对象，然后通过throw抛出错误（部分抛出异常方法中已包含了new，不需要我们去使用new）
+  - throw由jvm实现。throw与return相比，throw是异常退出，throw后执行哪行代码是不确定的
+  
+- try-catch-finally
 
-  - 其子类包括ClassCastException和NullPointerException等
-  - 这些异常大多发生在代码逻辑有误，所以不被编译器检测到（编译器不要求你对抛出这种异常的方法使用try catch）
+  - try区块放入的是可能导致错误的语句。同一异常不会被catch两次
 
-- 抛出异常后：Java在堆上创建异常对象》当前执行路径终止（跳出）》把问题提交给上一级别的环境（弹出异常对象的引用）》异常处理机制接管程序，并找一个恰当的地点来继续执行程序
+  - finally内的代码总会被执行
 
-- 自定义异常：必须从已有的异常类继承（可以是Exception类）
+      - 如果有异常但是需要抛给上层执行，则在抛出前执行finally内代码块
+      - 如果在try或catch代码块内有return语句，则return语句会在finally语句执行结束后才执行。但finally不能够改变返回值
+      - 如果finally语句中也有return语句，则try和catch语句中的return会丢失，实际会返回finally代码块中的返回值
+      - finally语句中也有return语句，不仅会覆盖try和catch内的返回值，还会掩盖try和catch内的异常，就像异常没有发生过一样
+      - finally中抛出异常，则原异常也会丢失
+      - 应该尽量避免在finally中使用return或者抛出异常
+
+  - 开发阶段遇到异常时获取异常信息，部署阶段则把异常写入日志文件中
+
+  - 异常链
+
+      - 可以在catch语句中重新（新建）抛出异常。再抛出的异常并不在当前try-catch语句中处理
+      - 使用场景：当前代码不能够完全处理该异常，需要调用者进一步处理
+
+      ```java
+      try {
+          System.out.println(3/0);
+      }catch(ArithmeticException e){
+          throw new Exception("啊这?",e);
+      } catch (Exception e) {
+          System.out.println("处理了");
+          e.printStackTrace();
+          throw e;
+      }finally{
+          System.out.println("数学真有趣");
+      }
+      
+      /* output:
+      数学真有趣
+      Exception in thread "main" java.lang.Exception: 啊这?
+              at Test.main(Test.java:51)
+      Caused by: java.lang.ArithmeticException: / by zero
+              at Test.main(Test.java:49)
+              
+      */
+      ```
 
 - 异常说明
 
@@ -555,16 +855,20 @@
 
   - 在方法中使用了关键字throws，后面接一个潜在异常类型的列表（声明有可能抛出的异常）
 
-  - 当被调用的方法中含有throws关键字时，该方法必须使用try-catch块中（编译器要求）
+  - 若当前异常自己不能处理，则应该向上报告
 
-    ```java
-    void makeCake(int size) throw TooBig,TooSmall{
-      if(size>100){
-        throw new TooBig();
+  - 子类方法抛出的异常必须不能够多于父类
+
+      -   如：父类不抛出异常，子类也不能抛出
+
+      ```java
+      void makeCake(int size) throws TooBig,TooSmall{
+        if(size>100){
+          throw new TooBig();
+        }
+        // ...
       }
-      // ...
-    }
-    ```
+      ```
 
 - 避开异常：不使用try-catch语句，在方法中再声明throw，把异常抛给上一个环境中的异常处理程序
 
@@ -575,11 +879,6 @@
 - 异常链
 
   - 异常链：在捕获一个异常后抛出另一个异常，并将原始的异常信息记录下来
-  - 使用
-
-
-
-p326- p350 特别快
 
 [TOC]
 

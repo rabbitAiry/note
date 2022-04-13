@@ -65,7 +65,7 @@
   return view;
   ```
   
-- 创建静态的fragment：仅使用xml指定
+- 创建静态的fragment：仅使用布局文件xml指定
 
   - 使用fragment标签，并在属性name中指定对应fragment类
   
@@ -119,6 +119,7 @@
   - 暂停状态：相关的activity进入了暂停状态
   - 停止状态：相关的activity进入了停止状态，或者使用了addToBackStack()方法且fragment仍在栈种
   - 销毁状态：相关的activity被销毁，或调用了replace()、remove()方法，且没有使用addToBackStack()方法
+  
 - 回调
   - onAttach()：碎片和活动建立关联时
   - onCreate()：创建时。先关联再创建
@@ -127,8 +128,32 @@
   - onDestroyView()：布局被移除时（使用栈时，只移除布局，不销毁fragment）
   - onDetach()：解除关联时
   - ...
+  
+- fragment切换的生命周期（fm.replace）
 
+  - 会在新Fragment被看到后，触发旧Fragment的destroy及解绑
 
+  ```
+  D/life:Fragment1: onAttach
+  D/life:Fragment1: onCreate
+  D/life:Fragment1: onCreateView
+  D/life:Fragment2: onAttach
+  D/life:Fragment2: onCreate
+  D/life:Fragment2: onCreateView
+  D/life:Fragment1: onDestroyView
+  D/life:Fragment1: onDetach 
+  ```
+
+- fragment的当前activity销毁（如：返回至上一级activity）
+
+  ```
+  D/life:Activity2: onStop
+  D/life:Fragment2: onDestroyView
+  D/life:Fragment2: onDetach 
+  D/life:Activity2: onDestroy
+  ```
+
+  
 
 ##### *4 Fragment之间的通信、方法调用
 
@@ -1537,7 +1562,7 @@
 
 ## 任务篇
 
-### #服务
+### #服务Service
 
 - 即使程序被切换到后台或者用户打开了其他app，服务仍能够正常运行
 - 服务并不是运行在一个独立的进程当中，而是依赖创建服务所在的应用程序进程。当app的进程被杀掉时，服务也将结束
@@ -1608,118 +1633,72 @@
 
 - Android四大组件都需要在Manifest中声明
 
-- 构建service：创建Service的子类
+- 基本操作
+
+    - 构建service：创建Service的子类
+    - 启动service：使用Intent指向Service子类，通过调用`startService()`或`stopService()`
+
+    ```java
+    Intent intent = new Intent(this, MyService.class);
+    // 服务的启动
+    startService(intent);
+    // 服务的关闭
+    stopService(intent);
+    ```
+
+    - 内部结束service：在MyService的任意位置调用`stopSelf()`
+
+    - 与Activity建立关联
+
+        - 创建Binder子类，并在其内部添加自己想要实现的方法
+        - 在service内部的`onBind()`中返回Binder实例
+
+        - 在activity中，通过`bindService()`或`unbindService()`进行绑定，并使用`ServiceConnection`与binder进行关联
+        - service可以和不止一个activity建立关联
+
+        ```java
+        // 实例化
+        private DownloadBinder mBinder = new DownloadBinder();
+        
+        // Binder子类
+        class DownloadBinder extends Binder {
+            public void startDownload(){
+                Log.d(TAG, "startDownload: ");
+            }
+            public int getProgress(){
+                Log.d(TAG, "getProgress: ");
+                return 0;
+            }
+        }
+        
+        // 返回binder
+        @Override
+        public IBinder onBind(Intent intent) {
+            return mBinder;
+        }
+        ```
 
 - Service生命周期
 
-  - 服务的启动与关闭：使用Intent指向Service子类
-  - `onCreate()`与`onStartCommand()`或`onBind()`：service未创建或绑定时，两者都会被调用。创建后，启动服务时只会执行后者
-  - 让服务自动结束：在MyService的任意位置调用`stopSelf()`方法
+  - `onCreate()`只会在线程第一次被创建时调用
+  - `onStartCommand()`：只要线程存在，每次调用`startService()`时都会调用
+  - `onBind()`：返回Binder实例
+  - `onDestroy()`：只有在service未绑定且已停止的情况下才会被销毁
 
-  ```java
-  public class MyService extends Service {
-      private static final String TAG = "ServiceTest";
-      public MyService() {
-      }
-  
-      @Override
-      public void onCreate() {
-          super.onCreate();
-          Log.d(TAG, "onCreate: ");
-      }
-  
-      @Override
-      public int onStartCommand(Intent intent, int flags, int startId) {
-          Log.d(TAG, "onStartCommand: ");
-          return super.onStartCommand(intent, flags, startId);
-      }
-  
-      @Override
-      public void onDestroy() {
-          Log.d(TAG, "onDestroy: ");
-          super.onDestroy();
-      }
-  
-      @Override
-      public IBinder onBind(Intent intent) {
-          // ...
-      }
-  }
-  ```
+- 后台
 
-  ```java
-  Intent intent = new Intent(this, MyService.class);
-  // 服务的启动
-  startService(intent);
-  // 服务的关闭
-  stopService(intent);
-  ```
+  - Android中的后台是指完全不依赖UI。因此注意，Service默认运行在主线程中
+  - 基于Service与Activity的生命周期不同，使用Service执行后台任务不需要担心Activity被摧毁
 
-- 活动和服务进行通信：使用Binder
-
-  - 在Serivce子类中
-
-    - 创建Binder子类
-    - 指定Binder对象，并在`onBind()`方法中返回
-
-    ```java
-    // 实例化
-    private DownloadBinder mBinder = new DownloadBinder();
-    
-    // Binder子类
-    class DownloadBinder extends Binder {
-        public void startDownload(){
-            Log.d(TAG, "startDownload: ");
-        }
-        public int getProgress(){
-            Log.d(TAG, "getProgress: ");
-            return 0;
-        }
-    }
-    
-    // 返回binder
-    @Override
-    public IBinder onBind(Intent intent) {
-        return mBinder;
-    }
-    ```
-
-  - 在Activity子类中
-
-    - 指定Binder对象，
-    - 指定ServiceConnection，并在`onServiceConnected()`方法中指定将Binder对象指向service。然后就可以调用Binder内的方法了
-
-    ```java
-    // 初始化
-    private MyService.DownloadBinder downloadBinder;
-    private ServiceConnection connection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            downloadBinder = (MyService.DownloadBinder)service;
-            downloadBinder.startDownload();
-            downloadBinder.getProgress();
-        }
-    
-        @Override
-        public void onServiceDisconnected(ComponentName name) {}
-    };
-    
-    // 使用binder绑定
-    Intent intent = new Intent(this, MyService.class);
-    bindService(bindIntent, connection, BIND_AUTO_CREATE);
-    
-    // 取消绑定
-    unbindService(connection);
-    ```
-    
-
-- 服务的生命周期
 
 ##### *3 前台服务与IntentService
 
 - 使用前台服务可以提高服务的系统优先级
 
-- 前台服务要求有一个正在运行的通知。在`onCreate()`中创建通知
+- 前台服务
+
+  - 需要在service的`onCreate()`中创建一个表示正在运行的通知
+  - 使用`startForeground()`启动
 
   ```java
   NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Channel", NotificationManager.IMPORTANCE_HIGH);
@@ -1814,7 +1793,7 @@
   ```java
   Intent intent = new Intent("my_action");
   
-  // 安卓8.0+： 所有广播发送须带发送类的包名
+  // 安卓8.0+： 所有j广播发送须带发送类的包名
   intent.setPackage("com.example.broadcastbestpractice");
   
   sendBroadcast(intent);
