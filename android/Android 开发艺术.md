@@ -155,10 +155,14 @@
       - 普通Service中的Binder不涉及IPC
       - Messenger和AIDL用到了Binder涉及IPC的部分
 
-- 使用AIDL
+- AIDL
+
+    - Android Interface Definition Language安卓接口定义语言
 
     - SDK会自动为我们生成AIDL所对应的Binder类，包括了方法，以及用以标识方法的id
+
     - transcat过程：仅针对客户端和服务端位于不同进程的情况
+
     - Stub和Stub的内部类Proxy的方法
         - `DESCRIPTOR`：Binder的唯一标识。一般以Binder的包名+类名表示
         - `asInterface(android.os.IBinder obj)`：用于将服务端的Binder对象转换为客户端所需要的AIDL接口类型对象。
@@ -166,7 +170,24 @@
         - `asBinder()`：用于返回当前的Binder对象
         - `onTransact()`：用于服务端。当客户端发起跨进程请求时，远程请求会通过系统底层封装后交由此方法来进行处理
         - `Proxy#getBookList()`（#表示内部）：此方法运行在客户端。根据id执行不同的操作
+
     - AIDL不是实现Binder的必需品，而是快速实现的工具
+
+    - AIDL支持的数据类型
+
+        - 基本数据类型
+        - String和CharSequence
+        - ArrayList，里面每个元素都必须能被AIDL支持
+        - HashMap，key和value都需要被AIDL支持
+        - Parcelable。若使用到了自定义的Parcelable对象，则需要新建一个同名的AIDL文件
+
+        ```java
+        // 在IBookManager.aidl中用到了Book这个类，
+        // 所以必须要创建Book.aidl
+        parcelable Book;
+        ```
+
+        - AIDL
 
 - Binder工作机制
 
@@ -181,143 +202,175 @@
 - Bundle
     - 使用Bundle在四大组件间通信（除ContentProvider）
     - Bundle通过Intent发送。因为Bundle实现了Parcelable接口，从而实现进程间传递数据，因此对数据类型有限制
-
-- 使用文件共享
+    
+- 文件（包括SharedPreferences）
   - Windows上如果一个文件被加入了排斥锁，则其他线程无法对其进行访问
-  - Android基于Linux系统，使得其并发读写可以没有限制地进行，显然任意出现问题
+  - Android基于Linux系统，使得其并发读写可以没有限制地进行，因此应该避开并发操作
   - 对文件格式无限制，但是难免避开并发性的问题。适用于对同步要求不高的进程之间通信
   - SharedPreference也属于文件的一种，但由于系统对其读写有一定的缓存策略，因此在多进程模式下，系统对它的读写并不可靠，面对高并发读写访问时，有很大几率会丢失数据
+  
 - 使用Messenger
 
-  - 可以在不同进程之间传递Message对象。本质是AIDL
+  - 在不同进程之间传递Message对象。本质是AIDL
   - 只能一个个处理，只能传输Bundle支持的数据类型
-- 使用AIDL：
-  - 服务端：创建Service用来监听客户端的连接请求、创建一个AIDL文件用于暴露接口、在Service中实现这些接口
-  - 客户端：绑定Service并将其返回的Binder还原、调用AIDL提供的方法
-  - AIDL接口的创建
-- 使用ContentProvider
-  - 数据源访问方面功能强大，支持一对多并发数据共享。Binder是其底层实现
-  - 将ContentProvider放在独立进程中时，Provider以及访问这个Provider的组件需要声明权限
-  - `onCreate()`方法仍会在主线程中执行，其余方法则在单独的线程中执行
-- 使用Socket套接字
-  - 功能强大，但实现略麻烦
-  - 分为流式套接字和用户数据套接字，分别用于TCP和UDP协议
-
-##### 2.5 Binder连接池
-
-> 痛点：假若要实现100个AIDL接口，总不能创建100个Service，因为Service是一种系统资源。所以要将所有的AIDL放在同一个Service中去管理
-
-- 在同一个Service下实现多个AIDL接口
-  - 服务端提供一个queryBinder接口，这个接口能够根据业务模块的特征来返回相应的Binder对象，不同的业务模块拿到所需的Binder对象后就可以进行远程方法调用了
-
-##### ex2.3 初次使用多进程
-
-- 创建AIDL文件
-
-  - 右键创建aidl文件，编写代码完成后执行assembleDebug。执行后生成了对应(同名)的Binder接口，位于generated目录下
-  - 如果AIDL文件使用到了自定义的Parcelable对象，那么必须新建一个和它同名的AIDL文件，并在其中声明为Parcelable类型
-
-  ```java
-  // IBookManager.aidl
-  package com.example.myaidl;
-  import com.example.myaidl.Book;
+  - 在服务端中需要
+      - 创建一个Service来处理客户端的连接请求
+      - 创建一个Handler，并通过它来创建一个Messenger对象
+      - 在Serivce的`onBind()`中返回这个Messenger对象底层的Binder
+  - 在客户端中需要
+      - 绑定服务端的Service，并使用其返回的IBinder对象创建一个Messenger
+      - 通过Messenger，可以向服务端发送Message对象
+  - 使用
+      - 使用Message的replyTo回复消息给服务端
   
-  interface IBookManager{
-      List<Book> getBookList();
-      void addBook(in Book book);
+- 使用AIDL
+  - 在服务端中需要
+      - 创建Service用来监听客户端的连接请求
+      - 创建一个AIDL文件用于暴露接口（提供方法但不实现）
+      - 在Service中实现这些接口
+      - 要注意存在并发冲突，比如使用CopyOnWriteArrayList来取代ArrayList
+  
+  ```aidl
+  // aidl
+  package com.example.servicetest;
+  interface MyAIDLService {
+  	int plus(int a, int b);
+  	String toUpperCase(String str);
   }
   ```
-
+  
   ```java
-  // Book.java
-  public class Book implements Parcelable{...}
-  ```
-
-  ```java
-  // Book.aidl
-  package com.example.myaidl;
-  parcelable Book;
-  ```
-
-- Service中构建Binder对象
-
-  - CopyOnWriteArrayList支持并发读写的List
-  - 与基础篇的Binder构建不同，此处的Binder类由AIDL产生的类提供
-  - 声明进程
-
-  ```xml
-  <service android:name=".BookManagerService"
-      		 android:process=":remote"/>
-  ```
-
-  ```java
-  // BookManagerService.java
-  private CopyOnWriteArrayList<Book> mBooklist = new CopyOnWriteArrayList<>();
-  
-  private Binder mBinder = new IBookManager.Stub() {
-      @Override
-      public List<Book> getBookList() throws RemoteException {
-          return mBooklist;
-      }
-  
-      @Override
-      public void addBook(Book book) throws RemoteException {
-          mBooklist.add(book);
-      }
-  };
-  
-  @Override
-  public void onCreate() {
-      super.onCreate();
-      mBooklist.add(new Book("十万个为什么",0));
-      mBooklist.add(new Book("吸血鬼的故事",1));
-  }
-  
+  // service
   @Override
   public IBinder onBind(Intent intent) {
       return mBinder;
   }
-  ```
-
-- Activity中连接：和基础篇绑定Binder一样，使用ServiceConnection
-
-  ```java
-  private ServiceConnection mConnection = new ServiceConnection() {
+  
+  MyAIDLService.Stub mBinder = new Stub() {
+  
       @Override
-      public void onServiceConnected(ComponentName name, IBinder service) {
-          IBookManager bookManager = IBookManager.Stub.asInterface(service);
-          try {
-              List<Book> list = bookManager.getBookList();
-              Log.i(TAG, "query book list, list type: "+list.getClass().getCanonicalName());
-              Log.i(TAG, "query book list: "+list.toString());
-          }catch (RemoteException e){
-              e.printStackTrace();
+      public String toUpperCase(String str) throws RemoteException {
+          if (str != null) {
+              return str.toUpperCase();
           }
+          return null;
       }
   
       @Override
-      public void onServiceDisconnected(ComponentName name) {
-  
+      public int plus(int a, int b) throws RemoteException {
+          return a + b;
       }
   };
   ```
-
+  
+  - 在客户端中需要
+      - 绑定Service并将其返回的Binder还原为AIDL接口所属的类型并调用AIDL提供的方法，就像往常使用普通service一样
+  
   ```java
-  Intent intent = new Intent(this, BookManagerService.class);
-  bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+  @Override
+  public void onServiceConnected(ComponentName name, IBinder service) {
+      myAIDLService = MyAIDLService.Stub.asInterface(service);
+      try {
+          int result = myAIDLService.plus(3, 5);
+          String upperStr = myAIDLService.toUpperCase("hello world");
+          Log.d("TAG", "result is " + result);
+          Log.d("TAG", "upperStr is " + upperStr);
+      } catch (RemoteException e) {
+          e.printStackTrace();
+      }
+  }
+  ```
+  
+- aidl如何实现解注册
+
+  - 因为序列化前后的对象不是同一个对象，所以无法解注册
+  - 使用`RemoteCallbackList`来删除跨进程listener的接口
+    - 原理：尽管不是同一对象，但是两者皆具有Binder对象。通过一一比对后删除
+
+- 暴毙的Binder：服务端进程可能意外停止了
+
+  - 通过给Binder设置DeathRecipient监听
+    - 当Binder死亡时，收到binderDied方法的回调
+    - 可以在此回调中尝试重新连接远程服务
+
+  - 在`onServiceDisconnected()`中重新连接
+
+- 在AIDL中进行权限验证：默认情况下，远程服务任何人都可以连接
+
+  - 在`onBind()`中进行验证，验证不通过直接返回null
+    - 使用permission验证。需在AndroidManifest中声明所需权限
+    - 采用id进行验证
+  - 在服务端的onTranscat方法中进行验证
+
+- 跨app的IPC
+
+  - 在`Manifest`中，为service添加action
+
+  ```xml
+  <service
+      android:name="com...MyService"
+      android:process=":remote" >
+      <intent-filter>
+          <action android:name="com...MyAIDLService"/>
+      </intent-filter>
+  </service>
   ```
 
-##### ex#2.3-2 完善IPC通信细节
+  - 将服务端的aidl连同原有的包路径一起拷贝到客户端
+  - 在客户端中，intent要指定该action
+  - Android5.0+还需要显性声明包名
 
-- :flags: 链接p92+
+  ```java
+  Intent intent = new Intent("com...MyAIDLService");
+  intent.setPackageName(this.getPackageName());
+  bindService(intent, connection, BIND_AUTO_CREATE);
+  ```
 
-##### ex#2.4 Socket通信
+- 使用ContentProvider
+  - 数据源访问方面功能强大，支持一对多并发数据共享。Binder是其底层实现
+  - 将ContentProvider放在独立进程中时，Provider以及访问这个Provider的组件需要声明权限
+  - `onCreate()`方法仍会在主线程中执行，其余方法则在单独的线程中执行
 
-- :flags:链接p119+
+- 使用Socket套接字
+  - 功能强大，但实现略麻烦
+  - 分为流式套接字和用户数据套接字，分别用于面向连接的TCP和无连接的UDP协议
+  - 流程
+      - 当Service启动时，会在线程中建立TCP服务，然后等待客户端的连接请求
+      - 当有客户端连接时，就会生成一个新的Socket
 
-##### ex#2.6 AIDL
+##### 2.5 Binder连接池
 
-- :flags:链接p128+
+-   如果一个service对应一个AIDL接口，则AIDL接口比较多时，会比较耗Service。应该使用Binder连接池在同一个Service下实现多个AIDL接口
+
+- 使用思路
+
+  -   服务端提供一个queryBinder接口，用以根据业务模块特征(id)返回对应的Binder对象
+  -   不同业务模块拿到所需的Binder对象后就进行远程方法调用
+  -   Binder连接池的主要作用是将每个业务模块的Binder请求统一转发到远程service中执行
+  -   概括：n个客户端AIDL接口、1个query、n个Binder、1个Sercice
+
+  ```java
+  // query
+  @Override
+  public IBinder queryBinder(int binderCode)throws ..{
+      Ibinder binder = null;
+      switch(binderCode){
+          case BINDER_1:{
+              // ...
+          }
+          case BINDER_2:{
+              // ...
+          }
+      }
+      return binder;
+  }
+  ```
+
+  ```java
+  // Binder连接池
+  ```
+
+  
 
 
 

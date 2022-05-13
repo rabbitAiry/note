@@ -3,6 +3,8 @@
 # Jetpack Compose
 
 > 先决条件：kotlin语法（包括lambda）的经验
+>
+> https://developer.android.google.cn/courses/pathways/compose
 
 
 
@@ -126,7 +128,7 @@ class MainActivity : AppCompatActivity() {
 - 通过使用recomposing来达到组件更新
 
   - 要向可组合对象添加内部状态，请使用mutableStateOf函数
-  - 使用`remember`函数使得state不变
+  - 使用`remember`函数记住z状态？
 
   ```kotlin
   import androidx.compose.material.Button
@@ -934,6 +936,45 @@ class MainActivity : AppCompatActivity() {
   	// ...
   }
   ```
+
+
+
+
+[TOC]
+
+### 主题
+
+##### Material主题
+
+-   颜色含义
+
+    -   primary：主颜色
+    -   secondary：强调色
+    -   on系列：对应颜色的content所使用的颜色
+        -   相同颜色下的on颜色必须相同
+        -   例：若primary的颜色和surface一样，则onPrimary必须和onSurface的颜色相同
+    -   [material官网颜色工具](https://material.io/resources/color/) 
+
+-   图像含义
+
+    ![](https://developer.android.google.cn/codelabs/jetpack-compose-theming/img/767fd40cb6938dc4.png)
+
+-   
+
+-   亮色主题下
+
+    -   primary（军蓝色）：toolbar背景颜色，button文字颜色
+    -   surface（浅蓝色）：button颜色
+
+    <img src="image/light_theme.jpg" style="zoom:33%;" />
+
+-   暗色主题下
+
+    -   primary（军蓝色）：button文字颜色
+    -   surface（浅蓝色）：toolbar背景颜色，button颜色
+
+    <img src="image/dark_theme.jpg" style="zoom:33%;" />
+
 
 
 

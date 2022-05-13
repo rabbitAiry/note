@@ -43,6 +43,13 @@
 
 ### #Fragment
 
+```
+关于fragment的疑惑
+- 每次被展示时都会重新调用一次onCreateView
+- 未与fragment绑定的activity获取的
+- 如何确认当前状态下是否已经与Activity绑定了：：无法触发
+```
+
 - 代表Activity中用户界面的独立部分，可以看作是灵活的小Activity。可以完全模块化Activity，也可以在多个Activity中重复使用这些fragment
 - fragment必须始终嵌入到Activity中，fragment拥有自己的生命周期，但其会受到Activity的生命周期的影响（但不一样）
 - 可以在运行时动态地添加或删除
@@ -1650,9 +1657,9 @@
 
     - 与Activity建立关联
 
+        - 注意，远程service不可绑定（跨进程）
         - 创建Binder子类，并在其内部添加自己想要实现的方法
-        - 在service内部的`onBind()`中返回Binder实例
-
+    - 在service内部的`onBind()`中返回Binder实例
         - 在activity中，通过`bindService()`或`unbindService()`进行绑定，并使用`ServiceConnection`与binder进行关联
         - service可以和不止一个activity建立关联
 
@@ -3085,7 +3092,7 @@
 
 - 重新编辑ViewModel子类中的代码
 
-  - MutableLieData：可变的LiveData
+  - MutableLeData：可变的LiveData
 
   ```kotlin
   val counter = MutableLiveData<Int>()

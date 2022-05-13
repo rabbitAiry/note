@@ -6,6 +6,10 @@
 >
 > Java编程的逻辑
 >
+> Effective Java
+>
+> 深入理解JVM
+>
 > 网络内容补充
 
 
@@ -125,9 +129,99 @@
 
 [TOC]
 
-### #2 类与对象
+### #2 对象
 
-##### 引用与存储
+##### 运行时数据区
+
+- 方法区Method Area/ HotSpot中的永久代，老年代？
+    - 被所有线程共享
+    - 存放被JVM加载的类信息、常量、静态变量、即时编译器编译后的代码等数据
+    - 如果在堆中没有内存完成实例分配，并且堆也无法再扩展时，将会抛出OutOfMemoryError异常
+    - 运行时常量池Runtime Constant Pool
+
+- 堆Heap/ 新生代？
+    - JVM所管理的内存中最大的一块，被所有线程共享
+    - 生命周期：在虚拟机启动时创建
+    - 为所有的实例和数组分配内存
+    - 如果在堆中没有内存完成实例分配，并且堆也无法再扩展时，将会抛出OutOfMemoryError异常
+
+- 本地方法栈Native Method Stack
+    - 与虚拟机栈发挥作用相似，但是为Native方法服务。甚至在有的虚拟机中与虚拟机栈合并了
+- 虚拟机栈VM Stack
+    - 线程私有
+    - 描述的是Java方法执行的内存模型
+        - 每个方法被执行的时候都会同时创建一个栈帧
+        - 栈帧用于存储局部变量表（栈内存）、操作栈、动态链接、方法出口等信息
+        - 每个方法执行完成后，栈帧从虚拟机栈中出栈
+
+    - 该区域的两种异常状况
+        - 如果线程请求的栈深度大于虚拟机所允许的深度，将抛出StackOverflowError异常
+        - 如果虚拟机栈可以动态扩展，当扩张时无法申请到足够的内存时会抛出OutOfMemoryError
+
+- 程序计数器Program Counter Register
+    - 线程私有
+    - 当前线程所执行的字节码的行号指示器
+    - PCR是为了线程切换后能够恢复到正确的执行位置而设的，各条线程之间的PCR互不影响
+    - 只能为Java方法计数，不能为native方法计数
+- 直接内存
+    - NIO（new Input/Output）类可以使用Native函数库直接分配堆内存，然后通过一个存储在Java堆里面的DirectByteBuffer对象作为这块内存的引用进行操作
+
+
+##### 快来吧，溢出君
+
+-   Java堆溢出
+
+    -   发生异常时分析思路
+        -   通过内存映像分析工具堆dump出来的堆存储快照进行内存分析
+        -   确认内存中对象是否是必须的
+        -   确认是内存泄漏还是内存溢出
+
+    ```java
+    static class OOMObject{}
+    public static void main(String[] args) {
+        List<OOMObject> list = new ArrayList<>();
+        while(true){
+            list.add(new OOMObject());
+        }
+    }
+    ```
+
+-   虚拟机栈和本地方法栈溢出（StackOverflowError）
+
+    ```java
+    private int stackLength = 1;
+    public void stackLeak(){
+        stackLength++;
+        stackLeak();
+    }
+    
+    public static void main(String[] args) {
+        TestJVM test = new TestJVM();
+        try{
+            test.stackLeak();
+        }catch(Throwable e){
+            System.out.println("stack length:"+test.stackLength);
+        }
+    }
+    ```
+
+-   运行时常量池溢出
+
+    ```java
+    public static void main(String[] args) {
+        List<String> list = new ArrayList<>();
+        int i = 0;
+        while(true){
+            list.add(String.valueOf(i++).intern());
+        }
+    }
+    ```
+
+-   方法区溢出
+
+-   本机直接内存溢出
+
+##### 引用
 
 -   引用和对象相当于遥控器和电视机，使用引用来操控对象
 
@@ -139,48 +233,32 @@
     String s = "abcd";
     ```
 
-- 数据类型
+-   对象访问与内存
 
-    - boolean、char、byte、short、int、long、float、double、void
-    - 这些变量不大，但存储在堆中不如存储在堆栈中高效，所以java提供了不用new来创建变量的方法创建了并非是“引用”的自动”变量“
-    - 基本类型具有包装器类，如int类型和Integer类。使用包装器类使得可以在堆中创建一个非基本对象来表示基本类型
-    - 高精度数字：BigInteger和BigDecimal
+    ```java
+    // e.g
+    Object obj = new Object()
+    ```
 
--   存储数据的地方
+    -   `Object obj`的语义会反映到栈内存中，作为一个reference类型数据出现
+    -   `new Object()`的语义会反映到堆内存中，形成一个存储Object类型的所有实例数据值的结构化内存
+    -   此对象的类型数据（如对象类型、父类）的地址信息则存储在方法区中
 
-    - 寄存器：数量极其有限
-    - 内存RAM
-        - 栈：存储函数的局部变量
-        - 堆：存放动态分配的对象
-        - 方法区：存放类的信息
+-   四种引用Reference（JDK1.2+）
 
-    - 静态存储：在固定位置的RAM中，存放程序运行时一直存在的数据
+    -   强引用Strong
+        -   GC不会回收（如果引用还在的话）
 
-    - 常量存储：存放在代码内部。嵌入式系统下可以选择存放ROM中
+    -   软引用Soft
+        -   系统将要发生OOM异常之前，会先回收这些对象
 
-    - 非RAM存储：数据存活于程序之外
+    -   弱引用Weak
+        -   GC工作时就会回收掉，无论当前内存是否足够
 
-##### static关键字
+    -   虚引用Phantom
+        -   无法通过虚引用来取得一个对象实例
 
-- 声明一个事物为static时，意味着这个数据或方法可以不创建对象直接访问或使用
-- 即使创建同一类的两个对象，其中static成员变量的存储空间一样（只有一份存储空间）
-- static方法中不能直接访问非static成员或方法
-
-- java没有东西是全局的，静态类方法最接近全局
-- java虚拟机会加载某个类是因为第一次有人要创建该类的新实例，或是使用该类的静态方法或变量。静态变量是在类被加载时初始化的
-- 静态的import：`import static java.lang.Math.*`
-
-##### 类加载过程
-
--   类的加载是指将类的相关信息加载到内存。在java中，类是动态加载的
--   类加载过程
-    -   分配内存保存类的信息
-    -   给类变量赋默认值
-    -   加载父类
-    -   设置父子关系
-    -   执行类初始化代码
-
-##### 对象创建过程
+##### 对象创建过程|@1、2、3、4
 
 - 对象创建过程包括
 
@@ -237,45 +315,69 @@
     System.out.println("default constructor");
   }
   ```
+  
+- @1：用静态工厂方法代替构造器
 
-##### 方法重载
+  - 静态工厂方法的名称可以将对象特点描述得更清晰
+  - 可以实现单例模式，或复用对象
+    - 这样的对象是受控的
+    - 这样的对象也能够轻易使用==来进行比较
 
-- 方法就是给某个动作起名字，为了让方法名字相同而形式参数不同的构造器存在，必须用到方法重载
+  - 可以抽象地返回其子类型的对象
 
-  - 允许有不同的参数列表，不同的返回值
+- @2：遇到多个构造器参数时要考虑用构建器builder模式
 
-- 若输入的类型没有对应方法，则会自动提升再寻找
+  - 可以使用setter替代，但不能保证线程安全
+  - 使用builder可读性佳，可把调用串起来
+    - 可以看作是抽象工厂
+
 
   ```java
-  void f(long x) { 
-  	System.out.println("long"); 
-  } 
-  void f(float x) {
-  	System.out.println("float"); 
+  public class Flower{
+      private final int size;
+      private final int color;
+      private final boolean eatable;
+      
+  	public static class Builder{
+          // 必选参数
+          private final int size;
+          private final int color;
+          // 可选参数
+          private boolean eatable = false;
+          
+          public Builder(int size, int color){
+              this.size = size;
+              this.color = color;
+          }
+          public Builder eatable(boolean eatable){
+              this.eatable = eatable;
+              return this;
+          }
+          public Flower build(){
+              return new Flower(this);
+          }
+      }
+      
+      private Flower(Builder builder){
+          this.size = size;
+          this.color = color;
+          this.eatable = eatable;
+      }
   }
-  void main(){
-  	f(1) // long
-  }
+  
+  // User part
+  Flower flower = new Flower.Builder(24, RED)
+      .eatable(false).build();
   ```
 
-##### 清除
+- @3：单例模式的多种形态
+
+  - 单例作为public成员、使用静态工厂方法获取单例、使用枚举类声明
+- @4：工具类的应该设置private构造器
+
+##### 垃圾收集|@6、7
 
 - java对象不具备和基本类型一样的生命周期。当其引用作用域结束时，其指向对象仍继续占据内存空间
-
-- 生命周期与作用域
-
-  - 只要变量的堆栈块还在堆栈上，局部变量就还活着
-
-    ```java
-    void do(){
-    		int cnt = 0;
-    		doHomework();
-    }
-    
-    void doHomeWork(){
-    	// 尽管cnt不在作用域中，但是do方法仍在堆栈上
-    }
-    ```
 
 - 垃圾收集器(GC)
 
@@ -298,21 +400,202 @@
   life = null;
   ```
 
+- GC标记对象无用的算法
+
+  - 引用计数法
+    - 给对象添加一个引用计数器，每当有一个地方引用它时，计数器值加1；引用失效时减1
+    - 计数器为0时，对象不可能再被使用
+    - 缺点：难以解决相互引用的对象的回收
+
+  - 根搜索法    *Java使用该GC算法
+    - 以“GC Roots”对象作为起点，当一个对象无法到达GC Roots时视其为不可用
+    - 可作为GC Roots的对象：虚拟机栈中引用的对象、方法区中的类静态属性，常量引用的对象、JNI引用的对象
+
+
+  ```java
+  // 根搜索算法的优势
+  class TestJVM{
+      public Object instance = null;
+      private static final int _1MB = 1024*1024;
+      
+      // 用于占内存
+      private byte[] bigSize = new byte[2*_1MB];
+      public static void main(String[] args) {
+          TestJVM objA = new TestJVM();
+          TestJVM objB = new TestJVM();
+          objA.instance = objB;
+          objB.instance = objA;
+          objA = null;
+          objB = null;
+          System.gc();
+      }
+  }
+  ```
+
+##### GC算法
+
+- 标记-清除（Mark-Sweep）算法
+    - 要清除一个对象，至少需要两次标记过程
+    - 第一次标记和筛选
+        - 标记方式是根搜索
+        - 筛选依据是该对象是否有必要执行`finalize()`方法
+        - 没有覆盖`finalize()`或其`finalize()`是否已被虚拟机调用，则没有必要执行
+        - 被标记和筛选中的对象会加入F-Queue中，而标记但未被筛选中的对象会被直接回收
+    - 第二次标记：发生在F-Queue内
+        - 对象由虚拟机自动建立的Finalizer线程去执行`finalize()`
+        - 这里的执行仅指触发该方法而不等待其结束。这样做的原因是如果某个对象的`finalize()`执行缓慢甚至发生死循环时，不会使得队列中其他永久处于等待状态
+        - `finalize()`方法是对象逃脱死亡命运的最后一次机会。对象可以在该方法中尝试与任一对象进行关联
+    - 缺点
+        - 标记和清除的效率都不高
+        - 标记清除之后会产生大量不连续的内存碎片
+        - 空间碎片太多会导致在之后的运行过程中，如若遇到需分配较大对象时无法找到足够的连续内存而不得不提前触发另一次的垃圾收集工作
+- 复制算法：更适合新生代
+    - 将可用内存按容量大小分为相等的两块，每次只使用其中一块，当内存用完时，将活着的对象复制并整理到另一块内存空间上
+    - 优化
+        - 在新生代中，每次GC后都有大批对象死去，只有少量存活
+        - 不按照1:1的比例来划分空间，而是划分为一块较大的Eden空间和两块较小的Survivor空间。每次使用Eden和其中一块Survivor
+        - [ ] Eden有什么用？
+        - HotSpot中，Eden和Survivor之比为8:1 
+        - 当Survivor空间不足时，可以使用老年代内存
+    - 评价
+        - 实现简单，也解决了碎片问题
+        - 代价是（未优化前）将内存缩小一半
+        - 复制操作可能较多，效率低
+        - 可以有效回收新生代
+- 标记-整理算法：更适合老年代
+    - 标记后，将所有存活对象整理好，然后直接清理剩余所有内存
+- 分代收集
+    - 新生代使用复制算法，因为清理后对象少，复制的工作量不大
+    - 老年代因为对象存活率高、没有额外空间对其进行分配担保，故使用标记-清理或标记-整理算法
+- GC在方法区的回收
+    - 在方法区中回收性价比较低
+    - 回收废弃常量：没有被任何对象引用的常量会被回收
+    - 回收无用的类判断条件有3个
+        - 该类的所有实例已被回收
+        - 该类的ClassLoader已被回收
+        - 该类对应的Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法
+    - 在大量使用反射、动态代理、CGLib等bytecode框架的场景，以及动态生成JSP和OSGi这类频繁自定义ClassLoader的场景都需要虚拟机具备类的卸载功能，以保证永久代不会溢出
+
+- @6：清除过期的对象引用
+    -   需要警惕内存泄漏的情形
+        -   类自己管理的内存（如，类的成员是数组，持有多个引用）。一旦元素被释放掉，则元素中包含的任意对象也应该被清空掉
+        -   缓存。使用弱引用（weak）来解决
+        -   监听器和回调
+- @7：避免使用终结方法finalize
+    - 交给GC就好
+
+##### HotSpot的垃圾收集器
+
+- Serial收集器
+    - 单线程收集器，在进行垃圾收集时必须暂停其他所有的工作线程直到收集结束（Stop The World）
+    - Serial是新生代收集器，采用复制算法
+    - Serial Old是老年代收集器，采用标记-整理算法
+    - 评价
+        - 因为垃圾收集过程是虚拟机在后台自动发起和自动完成的，所以会在用户毫不知情的情况下暂停工作线程会带来恶劣体验
+        - 简单而高效，毕竟没有线程交互开销
+- ParNew收集器
+    - Serial收集器的多线程版本。能与CMS收集器并行工作
+    - 新生代收集器，采用复制算法
+- Parallel Scavenge收集器
+    - 新生代收集器，采用复制算法，并行的多线程收集器
+    - 目的是达到一个可控制的吞吐量Throughput。吞吐量是仅运行用户代码和包括GC与运行用户代码的时间之比
+    - 与CMS收集器不兼容
+    - 最大垃圾收集停顿时间参数MaxGCPauseMillis
+        - 该参数降低后，系统会把新生代调小，使得垃圾收集发生更频繁
+        - 最终结果是吞吐量也下降了
+    - 吞吐量大小参数GCTimeRatio
+        - 该值x范围在（0-100）内，默认值为99
+        - 垃圾收集时间占比为$\frac{1}{1+x}$ 
+    - GC的自适应调节策略（GC Ergonomics）
+        - 将参数UseAdaptiveSizePolicy打开后，虚拟机会动态调整停顿时间和吞吐量
+- Parallel Old收集器
+    - 老年代收集器，使用多线程和标记-整理算法
+
+- CMS收集器（Concurrent Mark Sweep）
+    - 以获取最短回收停顿时间为目标的收集器
+    - 老年代收集器，使用标记清除算法，整个过程分为4步
+        - 初始标记（需Stop The World）：仅标记GC Roots能直接关联的对象，速度很快
+        - 并发标记：GC Roots Tracing
+        - 重新标记（需Stop The World）
+        - 并发清除
+
+    - 缺点
+        - 对CPU资源非常敏感
+        - 无法处理浮动垃圾（并发过程中产生的垃圾）
+        - 如果CMS运行期间预留的内存无法满足程序需要，就会出现Concurrent Mode Failure失败。这是虚拟机将启动后备预案，使用Serial Old收集器来重新进行老年代垃圾收集
+        - 为了提高速度，使用的是标记-清除算法而不是标记-整理算法
+
+- 并发与并行
+    - 并行：多条GC线程并行工作，但此时用户线程仍处于等待状态
+    - 并发：用户线程与GC线程同时执行
+- G1收集器
+    - 使用标记-整理算法，可以实现精确地控制停顿
+
+##### 内存分配与回收策略
+
+-   
+
 
 
 [TOC]
 
-### #3 常用基础类
+### #3 类
 
-##### 包装类
+##### static关键字
 
--   Java有8种基础类型，每种基础类型对应一个包装类
-    -   6种数据类型包装类都有一个共同的父类Number
+- 声明一个事物为static时，意味着这个数据或方法可以不创建对象直接访问或使用
+- 即使创建同一类的两个对象，其中static成员变量的存储空间一样（只有一份存储空间）
+- static方法中不能直接访问非static成员或方法
+
+- java没有东西是全局的，静态类方法最接近全局
+- java虚拟机会加载某个类是因为第一次有人要创建该类的新实例，或是使用该类的静态方法或变量。静态变量是在类被加载时初始化的
+- 静态的import：`import static java.lang.Math.*`
+
+##### 类加载过程
+
+-   类的加载是指将类的相关信息加载到内存。在java中，类是动态加载的
+-   类加载过程
+    -   分配内存保存类的信息
+    -   给类变量赋默认值
+    -   加载父类
+    -   设置父子关系
+    -   执行类初始化代码
+
+##### Object类|@5、8、9、10、11
+
+-   @8：覆盖equals时的通用约定
+    -   自反性reflexivity：自己必须等于自己
+    -   对称性symmetry：a=b时，也必须做到b=a。这很容易在多态的比较中出现不符合的情况
+    -   传递性transitive：如果a=b，b=c，则a=c
+    -   一致性consistency：不会因为多次调用equals方法，其结果会发生改变
+    -   非空性Non-nullity：对比双方都不应为空
+-   @9：覆盖equals时也要覆盖hashCode
+
+##### 包
+
+- 创建CLASSPATH，存放`.class`文件
+- 未给定访问权限：仅包内的该类对象可访问（包访问权限、friendly）
+- public：皆可访问
+- private：确保访问不了（比如阻止别人直接访问某个特定的构造器）
+- protected：提供包访问权限，以及为有继承关系的类提供权限
+- 类不可以是private或者protected的
+
+##### 包装类与基础数据类型
+
+-   数据类型
+
+    - boolean、char、byte、short、int、long、float、double、void
+    - [ ] 这些变量不大，但存储在堆中不如存储在栈中高效，所以java提供了不用new来创建变量的方法，设计了并非是“引用”的自动”变量“
+    - 基本类型具有包装器类，如int类型和Integer类。使用包装器类使得可以在堆中创建一个非基本对象来表示基本类型
+    - 6种数据类型包装类都有一个共同的父类Number
+    - 高精度数字：BigInteger和BigDecimal
+
 -   装箱、拆箱
     -   将基本类型转换为包装类的过程，一般称为装箱，反之称为拆箱
     -   Java5+引入了自动装拆箱，可以直接相互赋值
     -   自动装拆箱是编译器提供的能力，最后还是会替换为对应的valueOf和intValue方法
     -   使用`valueOf()`而不是new以创建包装类：除部分包装类外，都会缓存包装类对象，以减少需要创建对象的次数，节省空间
+
 -   包装类特性
     -   重写了Object类的方法
         -   `equals(Object obj)`：皆反映了对象间逻辑相等关系
@@ -321,12 +604,32 @@
     -   实现了Comparable
     -   与String相关：相互转换
     -   提供了常用变量
+
 -   不可变性：包装类的实例对象一旦创建，就没有办法修改了
     -   不可变性的实现
         -   所有包装类都声明为final，不能被继承
         -   内部基本类型值都是private final的
         -   没有定义setter方法
     -   不可变是为了使得程序更为简单安全，不会被意外更改，可以安全地共享数据
+
+-   @5：避免创建不必要的对象
+
+    -   优先使用基本类型，而不是包装类
+
+        ```java
+        // 耗时10s，原因是程序构造了2^31g
+        Long sum = 0L;
+        for (long i = 0; i < Integer.MAX_VALUE; i++) {
+            sum+=i;
+        }
+        
+        // 耗时1s
+        long sum2 = 0L;
+        for (long i = 0; i < Integer.MAX_VALUE; i++) {
+            sum2+=i;
+        }
+        ```
+
 
 ##### Integer的二进制算法
 
@@ -347,20 +650,343 @@
 -   字符属性
 -   字符转换
 
-##### String
-
-### #4 访问权限
-
-##### 包
-
-- 创建CLASSPATH，存放`.class`文件
-- 未给定访问权限：仅包内的该类对象可访问（包访问权限、friendly）
-- public：皆可访问
-- private：确保访问不了（比如阻止别人直接访问某个特定的构造器）
-- protected：提供包访问权限，以及为有继承关系的类提供权限
-- 类不可以是private或者protected的
 
 
+[TOC]
+
+### #4 泛型与容器
+
+##### 泛型
+
+-   泛型类
+    -   类名后面多了一个`<T>`
+    -   数据类型也可以为泛型T
+-   T表示类型参数，泛型就是类型参数化，处理的数据类型不是固定的，而是可以作为参数传入
+-   类型参数可以有多个，使用逗号分隔
+-   Java7+可以省略后面的类型参数
+
+```java
+Pair<String, Integer> pair = new Pair<>("可乐",3)
+```
+
+-   基本原理
+
+    -   通过类型擦除实现，类定义中的类型参数T会被替换为Object。Java编译器会插入必要的强制类型转换
+    -   在程序运行过程中，不知道泛型的实际类型参数
+
+-   好处：更好的安全性、更好的可读性
+
+-   泛型方法
+
+    -   与泛型类不同，调用时不需要特意指定类型参数的实际类型
+
+    ```java
+    public static <T> int indexOf(T[] arr, T elm)
+    ```
+
+-   泛型接口
+
+-   类型参数的限定：通过extends来表示
+
+    -   上界为某个类、某个接口
+
+    -   限定类型后，就可以使用该类型的方法了
+
+        ```java
+        // 上界为某个类
+        public class Pair<U extends Number, V extends Number>{
+            U first;
+            V second;
+            public Pair(U first, V second){
+                this.first = first;
+                this.second = second;
+            }
+            
+            // 允许使用Number的方法
+            public double sum(){
+                return first.doubleValue()+second.doubleValue()
+            }
+        }
+        ```
+
+-   类型参数限定 - 上界为其他类型
+
+    -   虽然Integer是Number的子类，但是MyArray\<Integer>不是MyArray\<Number>的子类。所以以下方法1会提示编译出错
+
+    -   通过类型限定来解决
+
+        ```java
+        // 以下是两个整个MyArray的元素添加进另一个MyArray的方法
+        // 1. 会提示编译错误
+        public void addAll(MyArray<E> c){
+            // ...
+        }
+        
+        // 2. 正确写法
+        public <T extends E> void addAll(MyArray<T> c){
+            // ...
+        }
+        
+        // 3. 使用通配符——等价于方法2
+        public void addAll(MyArray<? extends E> c){
+            // ...
+        }
+        
+        MyArray<Number> numbers = new MyArray<>();
+        MyArray<Integer> ints = new MyArray<>();
+        numbers.addAll(ints);
+        ```
+
+-   泛型的通配符
+
+    -   通配符形式更为简洁，但上面两种通配符都有一个重要的限制：只能读，不能写
+
+
+
+##### ArrayList
+
+-   剖析ArrayList
+
+    -   内部维护一个数组elementData
+    -   添加元素
+        -   每次添加数据前都会调用`ensureCapacityInternal(size+1)`以确保数组容量是够的
+        -   `ensureCapacityInternal(int minCapacity)`会先判断数组是不是空的，如果是，则指定分配大小不小于DEFAULT_CAPACITY
+        -   然后上述方法会调用`ensureExplcitCapacity(int minCapacity)`。方法内部，如果需要的长度大于当前数组的长度，则调用`grow()`方法
+        -   `grow(int minCapacity)`会先计算oldCapacity的1.5倍是否能够容纳minCapacity，如果能，newCapacity就是它了；如果不能则newCapacity等于minCapacity
+        -   然后使用`Arrays.copyOf()`创建新数组
+    -   删除元素
+        -   使用`System.arraycopy(Object src, int srcPos, Object dest, int destPos, int length)`将index以后的元素移一位
+        -   释放数组最后一位的引用，以便原对象被垃圾回收
+    -   基本思维：封装复杂操作，提供简化接口
+
+-   迭代器
+
+    -   foreach语法的背后
+
+        ```java
+        // 使用foreach
+        for(Integr a: list){
+            System.out.println(a);
+        }
+        
+        // 实际上，编译器会将foreach代码转换为类似如下代码
+        Iterator<Integer> it = list.iterator();
+        while(it.hasNext){
+            System.out.println(it.next());
+        }
+        ```
+
+    -   迭代器接口Iterator
+
+        -   只要对象实现了Iterable接口，就可以使用foreach语法
+        -   可以创建Iterator对象的类也不一定需要实现Iterable
+        -   Iterator接口提供了三个方法：`hasNext()`、`next()`、`remove()` 
+
+    -   ListIterator
+
+        -   扩展（继承）了Iterator接口，增加了向前、向后遍历的方法
+
+    -   迭代器的删除方法
+
+        ```java
+        // 这段代码会抛出ConcurrentModificationException
+        for(Integer a: list){
+        	if(a<=100)list.remove(a)
+        }
+        ```
+
+        -   因为迭代器的内部会维护一些索引位置相关的数据，要求在迭代过程中，容器不能发生结构性变化，否则这些索引位置就失效了
+        -   结构性变化是指令数据结构长度发生变化的操作
+        -   通过使用迭代器的`remove()`来避免这个问题
+
+        ```java
+        // 使用迭代器的remove()
+        Iterator<Integer> it = list.iterator();
+        while(it.hasNext()){
+            if(it.next()<=100){
+                it.remove();
+            }
+        }
+        ```
+
+-   ArrayList中迭代器的实现原理
+
+    -   成员内部类Itr实现了Iterator接口
+    -   Itr的成员变量`cursor`：表示下一个要返回的元素位置
+    -   Itr的成员变量`lastRet`：表示最后一个（上一次）返回的索引位置
+    -   Itr的成员变量`expectedModCount` 
+        -   表示期望的修改次数，初始化为外部类的当前修改次数modCount
+        -   每次迭代器操作的时候都会检查expectedModCount是否与modCount相同，以检测是否发生了结构性变化
+    -   `hasNext()`：比较当前下一个索引是否等于size
+    -   `next()`
+        -   先调用`checkForModification()`以检查是否发生了结构性变化
+        -   然后再更新成员变量的值以保持其语义
+        -   返回对应的元素
+    -   `remove()` 
+        -   删除索引为lastRet的值。因此再调用`remove()`前，应该先调用`next()` 
+        -   因为同时更新了expectedModCount的值，所以可以正确删除
+
+-   迭代器设计模式
+
+    -   将数据的实际组织方式与数据的迭代遍历相分离，是一种关注点分离的思想
+    -   需要访问容器元素的代码只需要一个Iterator接口的引用，而不需要关注数据的实际组织形式，可以使用一致和统一的方式进行访问
+    -   提供了简单而一致的接口
+
+-   ArrayList实现的接口
+
+    -   Collection：表示一个数据集合，数据间没有位置的概念
+    -   List：表示有序的数据集合，扩展了Collection
+    -   RandomAccess
+        -   这是一个没有代码的接口，在Java中被称为标记接口。
+        -   RandomAccess表示可以随机访问（指根据索引值直接可以定位到具体元素）
+        -   在一些通用的算法代码中，可以根据这个声明而选择效率更高的实现。比如二分查找会根据list是否实现了这个接口而采用不同的实现机制
+
+```java
+int binarySearch(List<? extends Comparable<? super T>> list, T key){
+    if(list instanceOf RandomAccess || list.size()< BINARYSEARCH_THRESHOLD){
+        return Collections.indexedBinarySearch(list,key);
+    }else{
+        return Collections.iteratorBinarySearch(list,key);
+    }
+}
+```
+
+-   ArrayList的其他方法及相关方法
+
+    -   两个构造方法
+
+        -   指定初始化的数组大小
+        -   以一个已有的Collection构建，数据会复制一份
+
+    -   两个返回数组的方法
+
+        -   `Object[] toArray()`返回Object数组
+        -   `<T> T[] toArray(T[] a)`：返回对应类型的数组。如果参数数组长度足以容纳所有元素，就使用该数组，否则新建一个
+
+        ```java
+        Integer[] arr1 = new Integer[list.size()];
+        list.toArray(arr1);
+        Integer[] arr2 = list.toArray(new Integer[0]);
+        System.out.println(Arrays.equal(arr1, arr2));
+        // true
+        ```
+
+    -   获得list
+
+        ```java
+        new ArrayList<>(Arrays.asList(a));
+        ```
+
+    -   控制数组容量
+
+        -   `ensureCapacity(int minCapacity)`：确保数组元素有这么大
+        -   `trimToSize()`：重新分配一个数组，大小刚好为实际内容的长度。可以节省数组占用的空间
+
+
+
+##### LinkedList
+
+-   LinkedList实现的接口
+    -   List、Collection、Iterable
+    -   Queue
+        -   主要操作有：添加（add、offer），查看（element、peek），删除（remove、poll）。每种操作都有两种形式
+        -   在队伍为空时，element和remove会抛出NoSuchElementException异常，而peek和poll返回null
+        -   在队列为满时（显然不包括LinkedList），add会抛出IllegalStateException，而offer只是返回false
+-   LinkedList实现原理
+    -   内部实现是一个双向链表
+    -   内部有成员变量：size、first、last、modCount
+    -   add方法
+        -   直接为last节点后新增一个节点
+        -   要注意这是个双向链表，因此添加节点需要更改周围的节点的指针
+        -   最后要维护内部三个成员变量的语义
+
+    -   get方法
+        -   先判断index是否有效
+        -   然后遍历找到对应元素。如果index大于长度/2，就从尾部往前搜，否则从头部开始搜（似乎在这节提到的方法中，只有get方法有优化搜索方向）
+
+    -   indexOf方法：遍历搜索
+    -   `add(int index, E element)`在头部或之间插入元素
+    -   删除元素
+        -   不需要专门让被删除节点变为null，毕竟已经没有node指向它了
+
+
+-   LinkedList特点
+    -   按需分配空间
+    -   不可以随机访问
+
+[TOC]
+
+##### HashMap
+
+-   实现的接口
+
+    -   Set接口：表示集合的概念，扩展了Collection但是没有定义新的方法
+    -   Map接口
+
+-   HashMap的`keySet()`, `values()`, `entrySet()`方法有一个共同的特点，它们返回的都是视图，而不是复制的值，基于返回值会直接修改Map自身
+
+-   HashMap实现原理
+
+    -   内部组成
+        -   `Entry<K, V>[] table `
+            -   Entry类型的数组，称为哈希表或哈希桶
+            -   其中每个元素指向一个单链表，链表中的每个节点表示一个键值对
+            -   Entry是内部类，是链表中的节点，内部有next变量指向下一个Entry节点
+            -   这个数组会随着键值对的添加进行扩展，扩展的策略类似于ArrayList
+        -   loadFactor：负载因子，表示整体上table被占用的程度。当table占用程度达到该比例时，table考虑进行扩展
+        -   threshold：阈值，值为table.length*loadFactor
+        -   table.length：总是为2的幂，初始值为16
+    -   put方法
+        -   如果表为空，则创建
+        -   如果找到对应的hash值，且能找到元素也相等的值并添加
+        -   否则，先判断空间够不够，size有没有超过阈值，然后在对应hash位置的头部添加节点
+
+-   在Java8+，在哈希冲突比较严重的情况下（大量元素映射到同一个链表），则将该链表转换为一个平衡的排序二叉树
+
+-   对哈希表进行排序：利用EntrySet
+
+    -   由于HashMap不保持顺序，所以没办法直接重映射，或者要使用LinkedHashMap
+
+    ```java
+    List<Map.Entry<Integer, Student>> list = new ArrayList<>(map.entrySet());
+    Collections.sort(list, new Comparator<Map.Entry<Integer, Student>>() {
+    
+        @Override
+        public int compare(Entry<Integer, Student> o1, Entry<Integer, Student> o2) {
+            return o1.getValue().compareTo(o2.getValue());
+        }
+    
+    });
+    for (Entry<Integer,Student> entry : list) {
+        System.out.print(entry.getKey()+":"+entry.getValue());
+    }
+    ```
+
+    
+
+
+
+##### HashSet
+
+-   实现原理
+    -   内部使用HashMap实现，其所有的值皆为常量
+    -   构造方法：构造一个新的HashMap
+    -   add方法、contains方法、remove方法：调用map的方法
+    -   iterator方法：返回map的keySet迭代器
+
+
+
+
+
+
+
+
+
+
+
+
+
+[TOC]
 
 ### #5 复用类
 
@@ -559,9 +1185,8 @@
 
 - 抽象
 
-  - 使用抽象类：有的类只应该其子类可以被初始化
-  - 如果一个类包含抽象方法，则该类必须被限制为是抽象的。抽象类可以没有抽象方法，这时可以阻止产生这个类的对象
-
+  - 
+  
 - 构造器、清除与多态
 
   - 当清除类时，应该先从子类开始清除，然后再调用其父类的清除方法
@@ -609,7 +1234,8 @@
   - 使用extend，但子接口不需要实现方法
   - 接口的继承允许继承多个接口，只需用`,`隔开
 - 接口的嵌套
-  - 实现private接口的类不能被其他类所使用
+  - [ ] 实现private接口的类不能被其他类所使用
+  - [ ] 为什么接口可以在类中被调用
 
 ##### 内部类
 
@@ -624,7 +1250,7 @@
   - 静态内部类：使用static修饰
 
       -   只可以访问外部类的静态变量和方法，不可以访问实例变量和方法
-      -   在当前外部类中，可以直接调用静态内部类的方法；其他类中则需要先创建一个内部类
+      -   在当前外部类中，可以直接调用静态内部类的方法；其他类中则只需要先创建一个内部类
       -   使用场景：与外部类关系密切，且不依赖于外部类实例
       -   例子：LinkedList中的私有静态内部类Node
 
@@ -772,22 +1398,17 @@
 
 ##### 异常
 
->   类图
->
->   -   Throwable
->
->       -   Error
->
->       -   Exception
->           -   受控异常
->           -   RuntimeException（非受检异常unchecked exception）
+```
+Throwable
+- Error
+- Exception
+    - 受检查异常
+    - RuntimeException（非受检异常unchecked exception）
+```
 
 -   Error
-    -   出现时，程序无法恢复，只能重启
+    -   出现时，程序无法恢复，只能重启（仍然可以使用try-catch语句）
     -   包括了OOMError、StackOverflowError等
-
--   方法重写与异常
-    -   -   
 -   RuntimeException：不需被检查的异常
     - 其子类包括ClassCastException和NullPointerException等
     - 这些异常大多发生在代码逻辑有误，所以不被编译器检测到（编译器不要求你对抛出这种异常的方法使用try catch）
@@ -1068,7 +1689,7 @@
 
   ```java
   // 1
-  Socket charSocket = new Socket("127.0.0.1",5000);
+  Socket chatSocket = new Socket("127.0.0.1",5000);
   // 2
   InputStreamReader stream = new InputStreamReader(chatSocket.getInputStream());
   // 3
@@ -1403,3 +2024,4 @@
 
 
 [TOC]
+
