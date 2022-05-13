@@ -292,3 +292,54 @@
     git config --global http.sslVerify "false"
     ```
 
+
+
+##### 使用模板
+
+1.   git拒绝了push
+
+     -   本地仓库和远程仓库的最新节点不一致
+
+         ```
+         remote:	a->b->d
+         local:	a->b->c
+         ```
+
+     -   解决1：先线型合并
+
+         ```sh
+         git fetch;
+         git rebase o/master
+         git push
+         
+         # 简写版本
+         git pull --rebase;
+         git push;
+         ```
+
+         ```
+         remote:	a->b->d->e
+         local:	a->b->c
+         			 ↘d->e
+         ```
+
+     -   解决2：先并行合并
+
+         ```sh
+         git fetch;
+         git merge o/master
+         git push
+         
+         # 简写版本
+         git pull;
+         git push;
+         ```
+
+         ```
+         remote:	a->b->d->e
+         			 ↘c↗
+         local:	a->b->c->e
+         			 ↘d↗
+         ```
+
+         
